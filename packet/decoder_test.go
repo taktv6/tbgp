@@ -16,6 +16,146 @@ type test struct {
 
 type decodeFunc func(*bytes.Buffer) (interface{}, error)
 
+func TestDecode(t *testing.T) {
+	tests := []test{
+		{
+			// Proper packet
+			testNum: 1,
+			input: []byte{
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				0, 19, // Length
+				4, // Type = Keepalive
+
+			},
+			wantFail: false,
+			expected: BGPMessage{
+				Header: &BGPHeader{
+					Length: 19,
+					Type:   4,
+				},
+			},
+		},
+		{
+			// Invalid marker
+			testNum: 2,
+			input: []byte{
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, // Marker
+				0, 19, // Length
+				4, // Type = Keepalive
+
+			},
+			wantFail: true,
+			expected: BGPMessage{
+				Header: &BGPHeader{
+					Length: 19,
+					Type:   4,
+				},
+			},
+		},
+		{
+			// Proper NOTIFICATION packet
+			testNum: 3,
+			input: []byte{
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				0, 21, // Length
+				3,    // Type = Notification
+				1, 1, // Message Header Error, Connection Not Synchronized.
+			},
+			wantFail: false,
+			expected: BGPMessage{
+				Header: &BGPHeader{
+					Length: 21,
+					Type:   3,
+				},
+				Body: BGPNotification{
+					ErrorCode:    1,
+					ErrorSubcode: 1,
+				},
+			},
+		},
+		{
+			// Proper OPEN packet
+			testNum: 4,
+			input: []byte{
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				0, 29, // Length
+				1,      // Type = Open
+				4,      // Version
+				0, 200, //ASN,
+				0, 15, // Holdtime
+				0, 0, 0, 100, // BGP Identifier
+				0, // Opt Parm Len
+			},
+			wantFail: false,
+			expected: BGPMessage{
+				Header: &BGPHeader{
+					Length: 29,
+					Type:   1,
+				},
+				Body: BGPOpen{
+					Version:       4,
+					AS:            200,
+					HoldTime:      15,
+					BGPIdentifier: BGPIdentifier(100),
+					OptParmLen:    0,
+				},
+			},
+		},
+		{
+			// Incomplete OPEN packet
+			testNum: 5,
+			input: []byte{
+				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				0, 28, // Length
+				1,      // Type = Open
+				4,      // Version
+				0, 200, //ASN,
+				0, 15, // Holdtime
+				0, 0, 0, 100, // BGP Identifier
+			},
+			wantFail: true,
+			expected: BGPMessage{
+				Header: &BGPHeader{
+					Length: 28,
+					Type:   1,
+				},
+				Body: BGPOpen{
+					Version:       4,
+					AS:            200,
+					HoldTime:      15,
+					BGPIdentifier: BGPIdentifier(100),
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		buf := bytes.NewBuffer(test.input)
+		msg, err := Decode(buf)
+
+		if err != nil && !test.wantFail {
+			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)
+			continue
+		}
+
+		if err == nil && test.wantFail {
+			t.Errorf("Expected error did not happen in test %d", test.testNum)
+			continue
+		}
+
+		if err != nil && test.wantFail {
+			continue
+		}
+
+		if msg == nil {
+			t.Errorf("Unexpected nil result in test %d. Expected: %v", test.testNum, test.expected)
+			continue
+		}
+
+		assert.Equal(t, test.expected, *msg)
+	}
+}
+
 func TestDecodeNotificationMsg(t *testing.T) {
 	tests := []test{
 		{
