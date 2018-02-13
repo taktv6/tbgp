@@ -2,6 +2,7 @@ package packet
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +16,65 @@ type test struct {
 }
 
 type decodeFunc func(*bytes.Buffer) (interface{}, error)
+
+func BenchmarkDecodeUpdateMsg(b *testing.B) {
+	input := []byte{0, 5, 8, 10, 16, 192, 168,
+		0, 53, // Total Path Attribute Length
+
+		255,  // Attribute flags
+		1,    // Attribute Type code (ORIGIN)
+		0, 1, // Length
+		2, // INCOMPLETE
+
+		0,      // Attribute flags
+		2,      // Attribute Type code (AS Path)
+		12,     // Length
+		2,      // Type = AS_SEQUENCE
+		2,      // Path Segement Length
+		59, 65, // AS15169
+		12, 248, // AS3320
+		1,      // Type = AS_SET
+		2,      // Path Segement Length
+		59, 65, // AS15169
+		12, 248, // AS3320
+
+		0,              // Attribute flags
+		3,              // Attribute Type code (Next Hop)
+		4,              // Length
+		10, 11, 12, 13, // Next Hop
+
+		0,          // Attribute flags
+		4,          // Attribute Type code (MED)
+		4,          // Length
+		0, 0, 1, 0, // MED 256
+
+		0,          // Attribute flags
+		5,          // Attribute Type code (Local Pref)
+		4,          // Length
+		0, 0, 1, 0, // Local Pref 256
+
+		0, // Attribute flags
+		6, // Attribute Type code (Atomic Aggregate)
+		0, // Length
+
+		0,    // Attribute flags
+		7,    // Attribute Type code (Atomic Aggregate)
+		6,    // Length
+		1, 2, // ASN
+		10, 11, 12, 13, // Address
+
+		8, 11, // 11.0.0.0/8
+	}
+
+	for i := 0; i < b.N; i++ {
+		buf := bytes.NewBuffer(input)
+		_, err := decodeUpdateMsg(buf, MsgLength(len(input)))
+		if err != nil {
+			fmt.Printf("decodeUpdateMsg failed: %v\n", err)
+		}
+		//buf.Next(1)
+	}
+}
 
 func TestDecode(t *testing.T) {
 	tests := []test{
@@ -235,7 +295,7 @@ func TestDecodeNotificationMsg(t *testing.T) {
 
 func TestDecodeUpdateMsg(t *testing.T) {
 	tests := []test{
-		/*{
+		{
 			// 2 withdraws only, valid update
 			testNum:  1,
 			input:    []byte{0, 5, 8, 10, 16, 192, 168, 0, 0},
@@ -263,8 +323,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				255,  // Attribute flags
 				1,    // Attribute Type code
 				0, 1, // Length
-				2,   // INCOMPLETE
-				100, // TRASH
+				2, // INCOMPLETE
 			},
 			wantFail: false,
 			expected: BGPUpdate{
@@ -297,7 +356,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with two path attributes (ORIGIN + ASPath), valid update
 			testNum: 3,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 13, // Total Path Attribute Length
+				0, 14, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -325,7 +384,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 13,
+				TotalPathAttrLen: 14,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -401,7 +460,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with two path attributes (ORIGIN + ASPath), valid update
 			testNum: 6,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 19, // Total Path Attribute Length
+				0, 20, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -433,7 +492,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 19,
+				TotalPathAttrLen: 20,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -477,7 +536,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with 3 path attributes (ORIGIN + ASPath, NH), valid update
 			testNum: 7,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 26, // Total Path Attribute Length
+				0, 27, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -515,7 +574,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 26,
+				TotalPathAttrLen: 27,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -568,7 +627,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with 4 path attributes (ORIGIN + ASPath, NH, MED), valid update
 			testNum: 8,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 33, // Total Path Attribute Length
+				0, 34, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -611,7 +670,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 33,
+				TotalPathAttrLen: 34,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -673,7 +732,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with 4 path attributes (ORIGIN + ASPath, NH, MED, Local Pref), valid update
 			testNum: 9,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 40, // Total Path Attribute Length
+				0, 41, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -721,7 +780,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 40,
+				TotalPathAttrLen: 41,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -792,7 +851,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			// 2 withdraws with 6 path attributes (ORIGIN, ASPath, NH, MED, Local Pref, Atomi Aggregate), valid update
 			testNum: 9,
 			input: []byte{0, 5, 8, 10, 16, 192, 168,
-				0, 43, // Total Path Attribute Length
+				0, 44, // Total Path Attribute Length
 
 				255,  // Attribute flags
 				1,    // Attribute Type code (ORIGIN)
@@ -843,7 +902,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				TotalPathAttrLen: 43,
+				TotalPathAttrLen: 44,
 				PathAttributes: []PathAttribute{
 					{
 						Optional:       true,
@@ -917,7 +976,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 			},
-		},*/
+		},
 		{
 			// 2 withdraws with 7 path attributes (ORIGIN, ASPath, NH, MED, Local Pref, Atomic Aggregate), valid update
 			testNum: 10,
