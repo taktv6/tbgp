@@ -66,9 +66,10 @@ func BenchmarkDecodeUpdateMsg(b *testing.B) {
 		8, 11, // 11.0.0.0/8
 	}
 
+	d := NewDecoder()
 	for i := 0; i < b.N; i++ {
 		buf := bytes.NewBuffer(input)
-		_, err := decodeUpdateMsg(buf, MsgLength(len(input)))
+		_, err := d.decodeUpdateMsg(buf, uint16(len(input)))
 		if err != nil {
 			fmt.Printf("decodeUpdateMsg failed: %v\n", err)
 		}
@@ -156,7 +157,7 @@ func TestDecode(t *testing.T) {
 					Version:       4,
 					AS:            200,
 					HoldTime:      15,
-					BGPIdentifier: BGPIdentifier(100),
+					BGPIdentifier: uint32(100),
 					OptParmLen:    0,
 				},
 			},
@@ -183,7 +184,7 @@ func TestDecode(t *testing.T) {
 					Version:       4,
 					AS:            200,
 					HoldTime:      15,
-					BGPIdentifier: BGPIdentifier(100),
+					BGPIdentifier: uint32(100),
 				},
 			},
 		},
@@ -191,7 +192,8 @@ func TestDecode(t *testing.T) {
 
 	for _, test := range tests {
 		buf := bytes.NewBuffer(test.input)
-		msg, err := Decode(buf)
+		d := NewDecoder()
+		msg, err := d.Decode(buf)
 
 		if err != nil && !test.wantFail {
 			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)
@@ -300,15 +302,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			testNum:  1,
 			input:    []byte{0, 5, 8, 10, 16, 192, 168, 0, 0},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -326,15 +326,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				2, // INCOMPLETE
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -347,7 +345,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 				},
 			},
@@ -372,15 +370,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				12, 248, // AS3320
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -393,7 +389,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -406,7 +402,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -480,15 +476,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				12, 248, // AS3320
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -501,7 +495,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -514,7 +508,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -522,7 +516,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -562,15 +556,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -583,7 +575,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -596,7 +588,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -604,7 +596,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -618,7 +610,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       3,
-						Value:          IPv4Addr{10, 11, 12, 13},
+						Value:          [4]byte{10, 11, 12, 13},
 					},
 				},
 			},
@@ -658,15 +650,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -679,7 +669,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -692,7 +682,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -700,7 +690,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -714,7 +704,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       3,
-						Value:          IPv4Addr{10, 11, 12, 13},
+						Value:          [4]byte{10, 11, 12, 13},
 					},
 					{
 						Optional:       false,
@@ -723,7 +713,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       4,
-						Value:          MED(256),
+						Value:          uint32(256),
 					},
 				},
 			},
@@ -768,15 +758,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -789,7 +777,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -802,7 +790,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -810,7 +798,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -824,7 +812,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       3,
-						Value:          IPv4Addr{10, 11, 12, 13},
+						Value:          [4]byte{10, 11, 12, 13},
 					},
 					{
 						Optional:       false,
@@ -833,7 +821,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       4,
-						Value:          MED(256),
+						Value:          uint32(256),
 					},
 					{
 						Optional:       false,
@@ -842,7 +830,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       5,
-						Value:          LocalPref(256),
+						Value:          uint32(256),
 					},
 				},
 			},
@@ -890,15 +878,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				0, // Length
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -911,7 +897,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -924,7 +910,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -932,7 +918,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -946,7 +932,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       3,
-						Value:          IPv4Addr{10, 11, 12, 13},
+						Value:          [4]byte{10, 11, 12, 13},
 					},
 					{
 						Optional:       false,
@@ -955,7 +941,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       4,
-						Value:          MED(256),
+						Value:          uint32(256),
 					},
 					{
 						Optional:       false,
@@ -964,7 +950,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       5,
-						Value:          LocalPref(256),
+						Value:          uint32(256),
 					},
 					{
 						Optional:       false,
@@ -1028,15 +1014,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 				8, 11, // 11.0.0.0/8
 			},
 			wantFail: false,
-			expected: BGPUpdate{
+			expected: &BGPUpdate{
 				WithdrawnRoutesLen: 5,
-				WithdrawnRoutes: []NLRI{
-					{
-						IP:     IPv4Addr{10, 0, 0, 0},
-						Pfxlen: 8,
-					},
-					{
-						IP:     IPv4Addr{192, 168, 0, 0},
+				WithdrawnRoutes: &NLRI{
+					IP:     [4]byte{10, 0, 0, 0},
+					Pfxlen: 8,
+					Next: &NLRI{
+						IP:     [4]byte{192, 168, 0, 0},
 						Pfxlen: 16,
 					},
 				},
@@ -1049,7 +1033,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: true,
 						Length:         1,
 						TypeCode:       1,
-						Value:          Origin(2),
+						Value:          uint8(2),
 					},
 					{
 						Optional:       false,
@@ -1062,7 +1046,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  2,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -1070,7 +1054,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 							{
 								Type:  1,
 								Count: 2,
-								ASNs: []ASN32{
+								ASNs: []uint32{
 									15169,
 									3320,
 								},
@@ -1084,7 +1068,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       3,
-						Value:          IPv4Addr{10, 11, 12, 13},
+						Value:          [4]byte{10, 11, 12, 13},
 					},
 					{
 						Optional:       false,
@@ -1093,7 +1077,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       4,
-						Value:          MED(256),
+						Value:          uint32(256),
 					},
 					{
 						Optional:       false,
@@ -1102,7 +1086,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						ExtendedLength: false,
 						Length:         4,
 						TypeCode:       5,
-						Value:          LocalPref(256),
+						Value:          uint32(256),
 					},
 					{
 						Optional:       false,
@@ -1120,16 +1104,14 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Length:         6,
 						TypeCode:       7,
 						Value: Aggretator{
-							ASN:  ASN16(258),
-							Addr: IPv4Addr{10, 11, 12, 13},
+							ASN:  uint16(258),
+							Addr: [4]byte{10, 11, 12, 13},
 						},
 					},
 				},
-				NLRI: []NLRI{
-					{
-						Pfxlen: 8,
-						IP:     IPv4Addr{11, 0, 0, 0},
-					},
+				NLRI: &NLRI{
+					Pfxlen: 8,
+					IP:     [4]byte{11, 0, 0, 0},
 				},
 			},
 		},
@@ -1137,7 +1119,8 @@ func TestDecodeUpdateMsg(t *testing.T) {
 
 	for _, test := range tests {
 		buf := bytes.NewBuffer(test.input)
-		msg, err := decodeUpdateMsg(buf, MsgLength(len(test.input)))
+		d := NewDecoder()
+		msg, err := d.decodeUpdateMsg(buf, uint16(len(test.input)))
 
 		if err != nil && !test.wantFail {
 			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)

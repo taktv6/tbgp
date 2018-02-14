@@ -8,14 +8,24 @@ import (
 	"net"
 )
 
+type Decoder struct {
+	objManager *objManager
+}
+
+func NewDecoder() *Decoder {
+	return &Decoder{
+		objManager: newObjManager(),
+	}
+}
+
 // Decode decodes a BGP message
-func Decode(buf *bytes.Buffer) (*BGPMessage, error) {
+func (d *Decoder) Decode(buf *bytes.Buffer) (*BGPMessage, error) {
 	hdr, err := decodeHeader(buf)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to decode header: %v", err)
 	}
 
-	body, err := decodeMsgBody(buf, hdr.Type, hdr.Length)
+	body, err := d.decodeMsgBody(buf, hdr.Type, hdr.Length)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to decode message: %v", err)
 	}
@@ -26,29 +36,29 @@ func Decode(buf *bytes.Buffer) (*BGPMessage, error) {
 	}, nil
 }
 
-func decodeMsgBody(buf *bytes.Buffer, t MsgType, l MsgLength) (interface{}, error) {
-	switch t {
+func (d *Decoder) decodeMsgBody(buf *bytes.Buffer, msgType uint8, l uint16) (interface{}, error) {
+	switch msgType {
 	case OpenMsg:
 		return decodeOpenMsg(buf)
 	case UpdateMsg:
-		return decodeUpdateMsg(buf, l)
+		return d.decodeUpdateMsg(buf, l)
 	case KeepaliveMsg:
 		return nil, nil // Nothing to decode in Keepalive message
 	case NotificationMsg:
 		return decodeNotificationMsg(buf)
 	}
-	return nil, fmt.Errorf("Unknown message type: %d", t)
+	return nil, fmt.Errorf("Unknown message type: %d", msgType)
 }
 
-func decodeUpdateMsg(buf *bytes.Buffer, l MsgLength) (BGPUpdate, error) {
-	msg := BGPUpdate{}
+func (d *Decoder) decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
+	msg := d.objManager.getBGPUpdate()
 
 	err := decode(buf, []interface{}{&msg.WithdrawnRoutesLen})
 	if err != nil {
 		return msg, err
 	}
 
-	msg.WithdrawnRoutes, err = decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
+	msg.WithdrawnRoutes, err = d.decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
 	if err != nil {
 		return msg, nil
 	}
@@ -65,7 +75,7 @@ func decodeUpdateMsg(buf *bytes.Buffer, l MsgLength) (BGPUpdate, error) {
 
 	nlriLen := uint16(l) - 4 - uint16(msg.TotalPathAttrLen) - uint16(msg.WithdrawnRoutesLen)
 	if nlriLen > 0 {
-		msg.NLRI, err = decodeNLRI(buf, nlriLen)
+		msg.NLRI, err = d.decodeNLRI(buf, nlriLen)
 		if err != nil {
 			return msg, err
 		}
@@ -74,24 +84,35 @@ func decodeUpdateMsg(buf *bytes.Buffer, l MsgLength) (BGPUpdate, error) {
 	return msg, nil
 }
 
-func decodeNLRI(buf *bytes.Buffer, l uint16) ([]NLRI, error) {
-	nlris := make([]NLRI, 0)
-
+func (d *Decoder) decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
+	var ret *NLRI
+	var eol *NLRI
+	var nlri *NLRI
+	var toCopy uint8
+	var j uint8
+	var err error
 	p := uint16(0)
 	for p < l {
-		nlri := NLRI{}
+		nlri = d.objManager.getNLRI()
+		if ret == nil {
+			ret = nlri
+			eol = nlri
+		} else {
+			eol.Next = nlri
+			eol = nlri
+		}
 
-		err := decode(buf, []interface{}{&nlri.Pfxlen})
+		err = decode(buf, []interface{}{&nlri.Pfxlen})
 		if err != nil {
 			return nil, err
 		}
 		p++
 
-		toCopy := uint8(math.Ceil(float64(nlri.Pfxlen) / float64(OctetLen)))
-		var addr IPv4Addr
-		for j := uint8(0); j < net.IPv4len%OctetLen; j++ {
+		toCopy = uint8(math.Ceil(float64(nlri.Pfxlen) / float64(OctetLen)))
+		var addr [4]byte
+		for j = 0; j < net.IPv4len%OctetLen; j++ {
 			if j < toCopy {
-				err := decode(buf, []interface{}{&addr[j]})
+				err = decode(buf, []interface{}{&addr[j]})
 				if err != nil {
 					return nil, err
 				}
@@ -102,16 +123,15 @@ func decodeNLRI(buf *bytes.Buffer, l uint16) ([]NLRI, error) {
 		nlri.IP = addr
 		p += uint16(toCopy)
 
-		nlris = append(nlris, nlri)
 	}
 
-	return nlris, nil
+	return ret, nil
 }
 
-func decodePathAttrs(buf *bytes.Buffer, tpal TotalPathAttrLen) ([]PathAttribute, error) {
+func decodePathAttrs(buf *bytes.Buffer, tpal uint16) ([]PathAttribute, error) {
 	attrs := make([]PathAttribute, 0)
 
-	p := TotalPathAttrLen(0)
+	p := uint16(0)
 	for p < tpal {
 		pa := PathAttribute{}
 
@@ -131,7 +151,7 @@ func decodePathAttrs(buf *bytes.Buffer, tpal TotalPathAttrLen) ([]PathAttribute,
 		if err != nil {
 			return nil, err
 		}
-		p += TotalPathAttrLen(n)
+		p += uint16(n)
 
 		switch pa.TypeCode {
 		case OriginAttr:
@@ -162,7 +182,7 @@ func decodePathAttrs(buf *bytes.Buffer, tpal TotalPathAttrLen) ([]PathAttribute,
 			return nil, fmt.Errorf("Invalid Attribute Type Code: %v", pa.TypeCode)
 		}
 
-		p += TotalPathAttrLen(pa.Length)
+		p += uint16(pa.Length)
 		attrs = append(attrs, pa)
 	}
 
@@ -198,7 +218,7 @@ func (pa *PathAttribute) decodeLocalPref(buf *bytes.Buffer) error {
 		return fmt.Errorf("Unable to recode local pref: %v", err)
 	}
 
-	pa.Value = LocalPref(lpref)
+	pa.Value = uint32(lpref)
 	return nil
 }
 
@@ -208,7 +228,7 @@ func (pa *PathAttribute) decodeMED(buf *bytes.Buffer) error {
 		return fmt.Errorf("Unable to recode local pref: %v", err)
 	}
 
-	pa.Value = MED(med)
+	pa.Value = uint32(med)
 	return nil
 }
 
@@ -231,7 +251,7 @@ func (pa *PathAttribute) decodeUint32(buf *bytes.Buffer) (uint32, error) {
 }
 
 func (pa *PathAttribute) decodeNextHop(buf *bytes.Buffer) error {
-	addr := IPv4Addr{}
+	addr := [4]byte{}
 
 	p := uint16(0)
 	n, err := buf.Read(addr[:])
@@ -254,7 +274,7 @@ func (pa *PathAttribute) decodeASPath(buf *bytes.Buffer) error {
 	p := uint16(0)
 	for p < pa.Length {
 		segment := ASPathSegment{
-			ASNs: make([]ASN32, 0),
+			ASNs: make([]uint32, 0),
 		}
 
 		err := decode(buf, []interface{}{&segment.Type, &segment.Count})
@@ -280,7 +300,7 @@ func (pa *PathAttribute) decodeASPath(buf *bytes.Buffer) error {
 			}
 			p += 2
 
-			segment.ASNs = append(segment.ASNs, ASN32(asn))
+			segment.ASNs = append(segment.ASNs, uint32(asn))
 		}
 		pa.Value = append(pa.Value.(ASPath), segment)
 	}
@@ -289,7 +309,7 @@ func (pa *PathAttribute) decodeASPath(buf *bytes.Buffer) error {
 }
 
 func (pa *PathAttribute) decodeOrigin(buf *bytes.Buffer) error {
-	origin := Origin(0)
+	origin := uint8(0)
 
 	p := uint16(0)
 	err := decode(buf, []interface{}{&origin})
@@ -318,25 +338,22 @@ func dumpNBytes(buf *bytes.Buffer, n uint16) error {
 }
 
 func (pa *PathAttribute) setLength(buf *bytes.Buffer) (int, error) {
-	ll := uint8(0)
-	lh := uint8(0)
-
-	err := decode(buf, []interface{}{&lh})
-	if err != nil {
-		return 0, err
-	}
-
-	bytesRead := 1
-	pa.Length = uint16(lh)
+	bytesRead := 0
 	if pa.ExtendedLength {
-		err := decode(buf, []interface{}{&ll})
+		err := decode(buf, []interface{}{&pa.Length})
 		if err != nil {
-			return 1, err
+			return 0, err
 		}
-		bytesRead++
-		pa.Length = uint16(lh)*256 + uint16(ll)
+		bytesRead = 2
+	} else {
+		x := uint8(0)
+		err := decode(buf, []interface{}{&x})
+		if err != nil {
+			return 0, err
+		}
+		pa.Length = uint16(x)
+		bytesRead = 1
 	}
-
 	return bytesRead, nil
 }
 
@@ -515,8 +532,9 @@ func _decodeHeader(buf *bytes.Buffer) (interface{}, error) {
 }
 
 func decode(buf *bytes.Buffer, fields []interface{}) error {
+	var err error
 	for _, field := range fields {
-		err := binary.Read(buf, binary.BigEndian, field)
+		err = binary.Read(buf, binary.BigEndian, field)
 		if err != nil {
 			return fmt.Errorf("Unable to read from buffer: %v", err)
 		}

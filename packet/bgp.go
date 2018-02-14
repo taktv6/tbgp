@@ -1,22 +1,5 @@
 package packet
 
-type MsgType uint8
-type MsgLength uint16
-
-type Version uint8
-type ASN16 uint16
-type ASN32 uint32
-type HoldTime uint16
-type BGPIdentifier uint32
-type OptParmLen uint8
-
-type ErrorCore uint8
-type ErrorSubCode uint8
-
-type WithdrawnRoutesLen uint16
-type TotalPathAttrLen uint16
-type AttrTypeCode uint8
-
 const (
 	OctetLen = 8
 
@@ -88,29 +71,29 @@ type BGPMessage struct {
 }
 
 type BGPHeader struct {
-	Length MsgLength
-	Type   MsgType
+	Length uint16
+	Type   uint8
 }
 
 type BGPOpen struct {
-	Version       Version
-	AS            ASN16
-	HoldTime      HoldTime
-	BGPIdentifier BGPIdentifier
-	OptParmLen    OptParmLen
+	Version       uint8
+	AS            uint16
+	HoldTime      uint16
+	BGPIdentifier uint32
+	OptParmLen    uint8
 }
 
 type BGPNotification struct {
-	ErrorCode    ErrorCore
-	ErrorSubcode ErrorSubCode
+	ErrorCode    uint8
+	ErrorSubcode uint8
 }
 
 type BGPUpdate struct {
-	WithdrawnRoutesLen WithdrawnRoutesLen
-	WithdrawnRoutes    []NLRI
-	TotalPathAttrLen   TotalPathAttrLen
+	WithdrawnRoutesLen uint16
+	WithdrawnRoutes    *NLRI
+	TotalPathAttrLen   uint16
 	PathAttributes     []PathAttribute
-	NLRI               []NLRI
+	NLRI               *NLRI
 }
 
 type PathAttribute struct {
@@ -119,32 +102,24 @@ type PathAttribute struct {
 	Transitive     bool
 	Partial        bool
 	ExtendedLength bool
-	TypeCode       AttrTypeCode
+	TypeCode       uint8
 	Value          interface{}
 }
 
-type IPv4Addr [4]byte
-type IPv6Addr [16]byte
-type Pfxlen uint8
-
 type NLRI struct {
 	IP     interface{}
-	Pfxlen Pfxlen
+	Pfxlen uint8
+	Next   *NLRI
 }
-
-type Origin uint8
-type MED uint32
-type LocalPref uint32
-type AtomicAggregate bool
 
 type ASPath []ASPathSegment
 type ASPathSegment struct {
 	Type  uint8
 	Count uint8
-	ASNs  []ASN32
+	ASNs  []uint32
 }
 
 type Aggretator struct {
-	Addr IPv4Addr
-	ASN  ASN16
+	Addr [4]byte
+	ASN  uint16
 }
