@@ -6,42 +6,34 @@ import (
 	"fmt"
 	"math"
 	"net"
+
+	"github.com/taktv6/tflow2/convert"
 )
 
-type Decoder struct {
-	objManager *objManager
-}
-
-func NewDecoder() *Decoder {
-	return &Decoder{
-		objManager: newObjManager(),
-	}
-}
-
 // Decode decodes a BGP message
-func (d *Decoder) Decode(buf *bytes.Buffer) (*BGPMessage, error) {
+func Decode(buf *bytes.Buffer) (*BGPMessage, error) {
 	hdr, err := decodeHeader(buf)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to decode header: %v", err)
 	}
 
-	body, err := d.decodeMsgBody(buf, hdr.Type, hdr.Length)
+	body, err := decodeMsgBody(buf, hdr.Type, hdr.Length-MinLen)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to decode message: %v", err)
 	}
 
 	return &BGPMessage{
-		Header: &hdr,
+		Header: hdr,
 		Body:   body,
 	}, nil
 }
 
-func (d *Decoder) decodeMsgBody(buf *bytes.Buffer, msgType uint8, l uint16) (interface{}, error) {
+func decodeMsgBody(buf *bytes.Buffer, msgType uint8, l uint16) (interface{}, error) {
 	switch msgType {
 	case OpenMsg:
 		return decodeOpenMsg(buf)
 	case UpdateMsg:
-		return d.decodeUpdateMsg(buf, l)
+		return decodeUpdateMsg(buf, l)
 	case KeepaliveMsg:
 		return nil, nil // Nothing to decode in Keepalive message
 	case NotificationMsg:
@@ -50,15 +42,15 @@ func (d *Decoder) decodeMsgBody(buf *bytes.Buffer, msgType uint8, l uint16) (int
 	return nil, fmt.Errorf("Unknown message type: %d", msgType)
 }
 
-func (d *Decoder) decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
-	msg := d.objManager.getBGPUpdate()
+func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
+	msg := &BGPUpdate{}
 
 	err := decode(buf, []interface{}{&msg.WithdrawnRoutesLen})
 	if err != nil {
 		return msg, err
 	}
 
-	msg.WithdrawnRoutes, err = d.decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
+	msg.WithdrawnRoutes, err = decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
 	if err != nil {
 		return msg, nil
 	}
@@ -75,7 +67,7 @@ func (d *Decoder) decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, erro
 
 	nlriLen := uint16(l) - 4 - uint16(msg.TotalPathAttrLen) - uint16(msg.WithdrawnRoutesLen)
 	if nlriLen > 0 {
-		msg.NLRI, err = d.decodeNLRI(buf, nlriLen)
+		msg.NLRI, err = decodeNLRI(buf, nlriLen)
 		if err != nil {
 			return msg, err
 		}
@@ -84,7 +76,7 @@ func (d *Decoder) decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, erro
 	return msg, nil
 }
 
-func (d *Decoder) decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
+func decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
 	var ret *NLRI
 	var eol *NLRI
 	var nlri *NLRI
@@ -92,8 +84,9 @@ func (d *Decoder) decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
 	var j uint8
 	var err error
 	p := uint16(0)
+
 	for p < l {
-		nlri = d.objManager.getNLRI()
+		nlri = &NLRI{}
 		if ret == nil {
 			ret = nlri
 			eol = nlri
@@ -128,14 +121,23 @@ func (d *Decoder) decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
 	return ret, nil
 }
 
-func decodePathAttrs(buf *bytes.Buffer, tpal uint16) ([]PathAttribute, error) {
-	attrs := make([]PathAttribute, 0)
+func decodePathAttrs(buf *bytes.Buffer, tpal uint16) (*PathAttribute, error) {
+	var ret *PathAttribute
+	var eol *PathAttribute
+	var pa *PathAttribute
 
 	p := uint16(0)
 	for p < tpal {
-		pa := PathAttribute{}
+		pa = &PathAttribute{}
+		if ret == nil {
+			ret = pa
+			eol = pa
+		} else {
+			eol.Next = pa
+			eol = pa
+		}
 
-		err := decodePathAttrFlags(buf, &pa)
+		err := decodePathAttrFlags(buf, pa)
 		if err != nil {
 			return nil, fmt.Errorf("Unable to get path attribute flags: %v", err)
 		}
@@ -183,10 +185,10 @@ func decodePathAttrs(buf *bytes.Buffer, tpal uint16) ([]PathAttribute, error) {
 		}
 
 		p += uint16(pa.Length)
-		attrs = append(attrs, pa)
+
 	}
 
-	return attrs, nil
+	return ret, nil
 }
 
 func (pa *PathAttribute) decodeAggregator(buf *bytes.Buffer) error {
@@ -400,13 +402,13 @@ func isExtendedLength(x uint8) bool {
 	return false
 }
 
-func decodeNotificationMsg(buf *bytes.Buffer) (BGPNotification, error) {
+func decodeNotificationMsg(buf *bytes.Buffer) (*BGPNotification, error) {
 	msg, err := _decodeNotificationMsg(buf)
-	return msg.(BGPNotification), err
+	return msg.(*BGPNotification), err
 }
 
 func _decodeNotificationMsg(buf *bytes.Buffer) (interface{}, error) {
-	msg := BGPNotification{}
+	msg := &BGPNotification{}
 
 	fields := []interface{}{
 		&msg.ErrorCode,
@@ -425,46 +427,46 @@ func _decodeNotificationMsg(buf *bytes.Buffer) (interface{}, error) {
 	switch msg.ErrorCode {
 	case MessageHeaderError:
 		if msg.ErrorSubcode > BadMessageType || msg.ErrorSubcode == 0 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	case OpenMessageError:
 		if msg.ErrorSubcode > UnacceptableHoldTime || msg.ErrorSubcode == 0 || msg.ErrorSubcode == DeprecatedOpenMsgError5 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	case UpdateMessageError:
 		if msg.ErrorSubcode > MalformedASPath || msg.ErrorSubcode == 0 || msg.ErrorSubcode == DeprecatedUpdateMsgError7 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	case HoldTimeExpired:
 		if msg.ErrorSubcode != 0 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	case FiniteStateMachineError:
 		if msg.ErrorSubcode != 0 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	case Cease:
 		if msg.ErrorSubcode != 0 {
-			return invalidErrCode(&msg)
+			return invalidErrCode(msg)
 		}
 	default:
-		return invalidErrCode(&msg)
+		return invalidErrCode(msg)
 	}
 
 	return msg, nil
 }
 
-func invalidErrCode(n *BGPNotification) (BGPNotification, error) {
-	return *n, fmt.Errorf("Invalid error sub code: %d/%d", n.ErrorCode, n.ErrorSubcode)
+func invalidErrCode(n *BGPNotification) (*BGPNotification, error) {
+	return n, fmt.Errorf("Invalid error sub code: %d/%d", n.ErrorCode, n.ErrorSubcode)
 }
 
-func decodeOpenMsg(buf *bytes.Buffer) (BGPOpen, error) {
+func decodeOpenMsg(buf *bytes.Buffer) (*BGPOpen, error) {
 	msg, err := _decodeOpenMsg(buf)
-	return msg.(BGPOpen), err
+	return msg.(*BGPOpen), err
 }
 
 func _decodeOpenMsg(buf *bytes.Buffer) (interface{}, error) {
-	msg := BGPOpen{}
+	msg := &BGPOpen{}
 
 	fields := []interface{}{
 		&msg.Version,
@@ -479,34 +481,90 @@ func _decodeOpenMsg(buf *bytes.Buffer) (interface{}, error) {
 		return msg, err
 	}
 
-	if msg.Version != 4 {
-		return msg, fmt.Errorf("Invalid version: %d", msg.Version)
+	err = validateOpen(msg)
+	if err != nil {
+		return nil, err
 	}
 
 	return msg, nil
 }
 
-func decodeHeader(buf *bytes.Buffer) (BGPHeader, error) {
+func validateOpen(msg *BGPOpen) error {
+	if msg.Version != BGP4Version {
+		return BGPError{
+			ErrorCode:    OpenMessageError,
+			ErrorSubCode: UnsupportedVersionNumber,
+			ErrorStr:     fmt.Sprintf("Unsupported version number"),
+		}
+	}
+	if !isValidIdentifier(msg.BGPIdentifier) {
+		return BGPError{
+			ErrorCode:    OpenMessageError,
+			ErrorSubCode: BadBGPIdentifier,
+			ErrorStr:     fmt.Sprintf("Invalid BGP identifier"),
+		}
+	}
+
+	return nil
+}
+
+func isValidIdentifier(id uint32) bool {
+	addr := net.IP(convert.Uint32Byte(id))
+	if addr.IsLoopback() {
+		return false
+	}
+
+	if addr.IsMulticast() {
+		return false
+	}
+
+	if addr[0] == 0 {
+		return false
+	}
+
+	if addr[0] == 255 && addr[1] == 255 && addr[2] == 255 && addr[3] == 255 {
+		return false
+	}
+
+	return true
+}
+
+func decodeHeader(buf *bytes.Buffer) (*BGPHeader, error) {
 	msg, err := _decodeHeader(buf)
-	return msg.(BGPHeader), err
+	if err != nil {
+		return nil, err
+	}
+	return msg.(*BGPHeader), err
 }
 
 func _decodeHeader(buf *bytes.Buffer) (interface{}, error) {
-	hdr := BGPHeader{}
+	hdr := &BGPHeader{}
 
 	marker := make([]byte, MarkerLen)
 	n, err := buf.Read(marker)
 	if err != nil {
-		return hdr, fmt.Errorf("Failed to read from buffer: %v", err)
+		return hdr, BGPError{
+			ErrorCode:    Cease,
+			ErrorSubCode: 0,
+			ErrorStr:     fmt.Sprintf("Failed to read from buffer: %v", err.Error()),
+		}
 	}
 
 	if n != MarkerLen {
-		return hdr, fmt.Errorf("Unable to read marker")
+		return hdr, BGPError{
+			ErrorCode:    Cease,
+			ErrorSubCode: 0,
+			ErrorStr:     fmt.Sprintf("Unable to read marker"),
+		}
 	}
 
 	for i := range marker {
-		if marker[i] != 1 {
-			return hdr, fmt.Errorf("Invalid marker: %v", marker)
+		if marker[i] != 255 {
+			return nil, BGPError{
+				ErrorCode:    MessageHeaderError,
+				ErrorSubCode: ConnectionNotSync,
+				ErrorStr:     fmt.Sprintf("Invalid marker: %v", marker),
+			}
 		}
 	}
 
@@ -517,15 +575,27 @@ func _decodeHeader(buf *bytes.Buffer) (interface{}, error) {
 
 	err = decode(buf, fields)
 	if err != nil {
-		return hdr, err
+		return hdr, BGPError{
+			ErrorCode:    Cease,
+			ErrorSubCode: 0,
+			ErrorStr:     fmt.Sprintf("%v", err.Error()),
+		}
 	}
 
 	if hdr.Length < MinLen || hdr.Length > MaxLen {
-		return hdr, fmt.Errorf("Invalid length in BGP header: %v", hdr.Length)
+		return hdr, BGPError{
+			ErrorCode:    MessageHeaderError,
+			ErrorSubCode: BadMessageLength,
+			ErrorStr:     fmt.Sprintf("Invalid length in BGP header: %v", hdr.Length),
+		}
 	}
 
 	if hdr.Type > KeepaliveMsg || hdr.Type == 0 {
-		return hdr, fmt.Errorf("Invalid message type: %d", hdr.Type)
+		return hdr, BGPError{
+			ErrorCode:    MessageHeaderError,
+			ErrorSubCode: BadMessageType,
+			ErrorStr:     fmt.Sprintf("Invalid message type: %d", hdr.Type),
+		}
 	}
 
 	return hdr, nil
@@ -540,4 +610,38 @@ func decode(buf *bytes.Buffer, fields []interface{}) error {
 		}
 	}
 	return nil
+}
+
+func (b *BGPMessage) Dump() {
+	fmt.Printf("Type: %d Length: %d\n", b.Header.Type, b.Header.Length)
+	switch b.Header.Type {
+	case OpenMsg:
+		o := b.Body.(*BGPOpen)
+		fmt.Printf("OPEN Message:\n")
+		fmt.Printf("\tVersion: %d\n", o.Version)
+		fmt.Printf("\tASN: %d\n", o.AS)
+		fmt.Printf("\tHoldTime: %d\n", o.HoldTime)
+		fmt.Printf("\tBGP Identifier: %d\n", o.BGPIdentifier)
+	case UpdateMsg:
+		u := b.Body.(*BGPUpdate)
+
+		fmt.Printf("UPDATE Message:\n")
+		fmt.Printf("Withdrawn routes:\n")
+		for r := u.WithdrawnRoutes; r != nil; r = r.Next {
+			x := r.IP.([4]byte)
+			fmt.Printf("\t%s/%d\n", net.IP(x[:]).String(), r.Pfxlen)
+		}
+
+		fmt.Printf("Path attributes:\n")
+		for a := u.PathAttributes; a != nil; a = a.Next {
+			fmt.Printf("\tType:%d\n", a.TypeCode)
+			fmt.Printf("\t:%v\n", a.Value)
+		}
+
+		fmt.Printf("NLRIs:\n")
+		for n := u.NLRI; n != nil; n = n.Next {
+			x := n.IP.([4]byte)
+			fmt.Printf("\t%s/%d\n", net.IP(x[:]).String(), n.Pfxlen)
+		}
+	}
 }

@@ -1,7 +1,8 @@
 package packet
 
 const (
-	OctetLen = 8
+	OctetLen    = 8
+	BGP4Version = 4
 
 	MarkerLen = 16
 	HeaderLen = 19
@@ -42,7 +43,7 @@ const (
 	InvalidOriginAttr         = 6
 	DeprecatedUpdateMsgError7 = 7
 	InvalidNextHopAttr        = 8
-	OptionalAttError          = 9
+	OptionalAttrError         = 9
 	InvalidNetworkField       = 10
 	MalformedASPath           = 11
 
@@ -63,7 +64,27 @@ const (
 	// ASPath Segment Types
 	ASSet      = 1
 	ASSequence = 2
+
+	// NOTIFICATION Cease error SubCodes (RFC4486)
+	MaxPrefReached                = 1
+	AdminShut                     = 2
+	PeerDeconfigured              = 3
+	AdminReset                    = 4
+	ConnectionRejected            = 5
+	OtherConfigChange             = 8
+	ConnectionCollisionResolution = 7
+	OutOfResoutces                = 8
 )
+
+type BGPError struct {
+	ErrorCode    uint8
+	ErrorSubCode uint8
+	ErrorStr     string
+}
+
+func (b BGPError) Error() string {
+	return b.ErrorStr
+}
 
 type BGPMessage struct {
 	Header *BGPHeader
@@ -92,7 +113,7 @@ type BGPUpdate struct {
 	WithdrawnRoutesLen uint16
 	WithdrawnRoutes    *NLRI
 	TotalPathAttrLen   uint16
-	PathAttributes     []PathAttribute
+	PathAttributes     *PathAttribute
 	NLRI               *NLRI
 }
 
@@ -104,6 +125,7 @@ type PathAttribute struct {
 	ExtendedLength bool
 	TypeCode       uint8
 	Value          interface{}
+	Next           *PathAttribute
 }
 
 type NLRI struct {

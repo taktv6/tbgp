@@ -66,10 +66,9 @@ func BenchmarkDecodeUpdateMsg(b *testing.B) {
 		8, 11, // 11.0.0.0/8
 	}
 
-	d := NewDecoder()
 	for i := 0; i < b.N; i++ {
 		buf := bytes.NewBuffer(input)
-		_, err := d.decodeUpdateMsg(buf, uint16(len(input)))
+		_, err := decodeUpdateMsg(buf, uint16(len(input)))
 		if err != nil {
 			fmt.Printf("decodeUpdateMsg failed: %v\n", err)
 		}
@@ -83,13 +82,13 @@ func TestDecode(t *testing.T) {
 			// Proper packet
 			testNum: 1,
 			input: []byte{
-				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
 				0, 19, // Length
 				4, // Type = Keepalive
 
 			},
 			wantFail: false,
-			expected: BGPMessage{
+			expected: &BGPMessage{
 				Header: &BGPHeader{
 					Length: 19,
 					Type:   4,
@@ -106,7 +105,7 @@ func TestDecode(t *testing.T) {
 
 			},
 			wantFail: true,
-			expected: BGPMessage{
+			expected: &BGPMessage{
 				Header: &BGPHeader{
 					Length: 19,
 					Type:   4,
@@ -117,18 +116,18 @@ func TestDecode(t *testing.T) {
 			// Proper NOTIFICATION packet
 			testNum: 3,
 			input: []byte{
-				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
 				0, 21, // Length
 				3,    // Type = Notification
 				1, 1, // Message Header Error, Connection Not Synchronized.
 			},
 			wantFail: false,
-			expected: BGPMessage{
+			expected: &BGPMessage{
 				Header: &BGPHeader{
 					Length: 21,
 					Type:   3,
 				},
-				Body: BGPNotification{
+				Body: &BGPNotification{
 					ErrorCode:    1,
 					ErrorSubcode: 1,
 				},
@@ -138,26 +137,26 @@ func TestDecode(t *testing.T) {
 			// Proper OPEN packet
 			testNum: 4,
 			input: []byte{
-				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
 				0, 29, // Length
 				1,      // Type = Open
 				4,      // Version
 				0, 200, //ASN,
 				0, 15, // Holdtime
-				0, 0, 0, 100, // BGP Identifier
+				10, 20, 30, 40, // BGP Identifier
 				0, // Opt Parm Len
 			},
 			wantFail: false,
-			expected: BGPMessage{
+			expected: &BGPMessage{
 				Header: &BGPHeader{
 					Length: 29,
 					Type:   1,
 				},
-				Body: BGPOpen{
+				Body: &BGPOpen{
 					Version:       4,
 					AS:            200,
 					HoldTime:      15,
-					BGPIdentifier: uint32(100),
+					BGPIdentifier: uint32(169090600),
 					OptParmLen:    0,
 				},
 			},
@@ -166,7 +165,7 @@ func TestDecode(t *testing.T) {
 			// Incomplete OPEN packet
 			testNum: 5,
 			input: []byte{
-				1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // Marker
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
 				0, 28, // Length
 				1,      // Type = Open
 				4,      // Version
@@ -175,12 +174,12 @@ func TestDecode(t *testing.T) {
 				0, 0, 0, 100, // BGP Identifier
 			},
 			wantFail: true,
-			expected: BGPMessage{
+			expected: &BGPMessage{
 				Header: &BGPHeader{
 					Length: 28,
 					Type:   1,
 				},
-				Body: BGPOpen{
+				Body: &BGPOpen{
 					Version:       4,
 					AS:            200,
 					HoldTime:      15,
@@ -192,8 +191,7 @@ func TestDecode(t *testing.T) {
 
 	for _, test := range tests {
 		buf := bytes.NewBuffer(test.input)
-		d := NewDecoder()
-		msg, err := d.Decode(buf)
+		msg, err := Decode(buf)
 
 		if err != nil && !test.wantFail {
 			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)
@@ -214,7 +212,7 @@ func TestDecode(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(t, test.expected, *msg)
+		assert.Equal(t, test.expected, msg)
 	}
 }
 
@@ -285,7 +283,7 @@ func TestDecodeNotificationMsg(t *testing.T) {
 			testNum:  11,
 			input:    []byte{2, 2},
 			wantFail: false,
-			expected: BGPNotification{
+			expected: &BGPNotification{
 				ErrorCode:    2,
 				ErrorSubcode: 2,
 			},
@@ -312,7 +310,6 @@ func TestDecodeUpdateMsg(t *testing.T) {
 						Pfxlen: 16,
 					},
 				},
-				PathAttributes: []PathAttribute{},
 			},
 		},
 		{
@@ -337,16 +334,14 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 5,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
 				},
 			},
 		},
@@ -381,17 +376,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 14,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -487,17 +480,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 20,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -567,17 +558,17 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 27,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
+
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -602,15 +593,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 								},
 							},
 						},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       3,
-						Value:          [4]byte{10, 11, 12, 13},
+						Next: &PathAttribute{
+							Optional:       false,
+							Transitive:     false,
+							Partial:        false,
+							ExtendedLength: false,
+							Length:         4,
+							TypeCode:       3,
+							Value:          [4]byte{10, 11, 12, 13},
+						},
 					},
 				},
 			},
@@ -661,17 +652,16 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 34,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -696,24 +686,24 @@ func TestDecodeUpdateMsg(t *testing.T) {
 								},
 							},
 						},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       3,
-						Value:          [4]byte{10, 11, 12, 13},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       4,
-						Value:          uint32(256),
+						Next: &PathAttribute{
+							Optional:       false,
+							Transitive:     false,
+							Partial:        false,
+							ExtendedLength: false,
+							Length:         4,
+							TypeCode:       3,
+							Value:          [4]byte{10, 11, 12, 13},
+							Next: &PathAttribute{
+								Optional:       false,
+								Transitive:     false,
+								Partial:        false,
+								ExtendedLength: false,
+								Length:         4,
+								TypeCode:       4,
+								Value:          uint32(256),
+							},
+						},
 					},
 				},
 			},
@@ -769,17 +759,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 41,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -804,33 +792,33 @@ func TestDecodeUpdateMsg(t *testing.T) {
 								},
 							},
 						},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       3,
-						Value:          [4]byte{10, 11, 12, 13},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       4,
-						Value:          uint32(256),
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       5,
-						Value:          uint32(256),
+						Next: &PathAttribute{
+							Optional:       false,
+							Transitive:     false,
+							Partial:        false,
+							ExtendedLength: false,
+							Length:         4,
+							TypeCode:       3,
+							Value:          [4]byte{10, 11, 12, 13},
+							Next: &PathAttribute{
+								Optional:       false,
+								Transitive:     false,
+								Partial:        false,
+								ExtendedLength: false,
+								Length:         4,
+								TypeCode:       4,
+								Value:          uint32(256),
+								Next: &PathAttribute{
+									Optional:       false,
+									Transitive:     false,
+									Partial:        false,
+									ExtendedLength: false,
+									Length:         4,
+									TypeCode:       5,
+									Value:          uint32(256),
+								},
+							},
+						},
 					},
 				},
 			},
@@ -889,17 +877,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 44,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -924,41 +910,41 @@ func TestDecodeUpdateMsg(t *testing.T) {
 								},
 							},
 						},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       3,
-						Value:          [4]byte{10, 11, 12, 13},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       4,
-						Value:          uint32(256),
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       5,
-						Value:          uint32(256),
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         0,
-						TypeCode:       6,
+						Next: &PathAttribute{
+							Optional:       false,
+							Transitive:     false,
+							Partial:        false,
+							ExtendedLength: false,
+							Length:         4,
+							TypeCode:       3,
+							Value:          [4]byte{10, 11, 12, 13},
+							Next: &PathAttribute{
+								Optional:       false,
+								Transitive:     false,
+								Partial:        false,
+								ExtendedLength: false,
+								Length:         4,
+								TypeCode:       4,
+								Value:          uint32(256),
+								Next: &PathAttribute{
+									Optional:       false,
+									Transitive:     false,
+									Partial:        false,
+									ExtendedLength: false,
+									Length:         4,
+									TypeCode:       5,
+									Value:          uint32(256),
+									Next: &PathAttribute{
+										Optional:       false,
+										Transitive:     false,
+										Partial:        false,
+										ExtendedLength: false,
+										Length:         0,
+										TypeCode:       6,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -1025,17 +1011,15 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					},
 				},
 				TotalPathAttrLen: 53,
-				PathAttributes: []PathAttribute{
-					{
-						Optional:       true,
-						Transitive:     true,
-						Partial:        true,
-						ExtendedLength: true,
-						Length:         1,
-						TypeCode:       1,
-						Value:          uint8(2),
-					},
-					{
+				PathAttributes: &PathAttribute{
+					Optional:       true,
+					Transitive:     true,
+					Partial:        true,
+					ExtendedLength: true,
+					Length:         1,
+					TypeCode:       1,
+					Value:          uint8(2),
+					Next: &PathAttribute{
 						Optional:       false,
 						Transitive:     false,
 						Partial:        false,
@@ -1060,52 +1044,52 @@ func TestDecodeUpdateMsg(t *testing.T) {
 								},
 							},
 						},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       3,
-						Value:          [4]byte{10, 11, 12, 13},
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       4,
-						Value:          uint32(256),
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         4,
-						TypeCode:       5,
-						Value:          uint32(256),
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         0,
-						TypeCode:       6,
-					},
-					{
-						Optional:       false,
-						Transitive:     false,
-						Partial:        false,
-						ExtendedLength: false,
-						Length:         6,
-						TypeCode:       7,
-						Value: Aggretator{
-							ASN:  uint16(258),
-							Addr: [4]byte{10, 11, 12, 13},
+						Next: &PathAttribute{
+							Optional:       false,
+							Transitive:     false,
+							Partial:        false,
+							ExtendedLength: false,
+							Length:         4,
+							TypeCode:       3,
+							Value:          [4]byte{10, 11, 12, 13},
+							Next: &PathAttribute{
+								Optional:       false,
+								Transitive:     false,
+								Partial:        false,
+								ExtendedLength: false,
+								Length:         4,
+								TypeCode:       4,
+								Value:          uint32(256),
+								Next: &PathAttribute{
+									Optional:       false,
+									Transitive:     false,
+									Partial:        false,
+									ExtendedLength: false,
+									Length:         4,
+									TypeCode:       5,
+									Value:          uint32(256),
+									Next: &PathAttribute{
+										Optional:       false,
+										Transitive:     false,
+										Partial:        false,
+										ExtendedLength: false,
+										Length:         0,
+										TypeCode:       6,
+										Next: &PathAttribute{
+											Optional:       false,
+											Transitive:     false,
+											Partial:        false,
+											ExtendedLength: false,
+											Length:         6,
+											TypeCode:       7,
+											Value: Aggretator{
+												ASN:  uint16(258),
+												Addr: [4]byte{10, 11, 12, 13},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -1119,8 +1103,7 @@ func TestDecodeUpdateMsg(t *testing.T) {
 
 	for _, test := range tests {
 		buf := bytes.NewBuffer(test.input)
-		d := NewDecoder()
-		msg, err := d.decodeUpdateMsg(buf, uint16(len(test.input)))
+		msg, err := decodeUpdateMsg(buf, uint16(len(test.input)))
 
 		if err != nil && !test.wantFail {
 			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)
@@ -1145,13 +1128,13 @@ func TestDecodeOpenMsg(t *testing.T) {
 		{
 			// Valid message
 			testNum:  1,
-			input:    []byte{4, 1, 1, 0, 15, 0, 0, 10, 11, 0},
+			input:    []byte{4, 1, 1, 0, 15, 10, 20, 30, 40, 0},
 			wantFail: false,
-			expected: BGPOpen{
+			expected: &BGPOpen{
 				Version:       4,
 				AS:            257,
 				HoldTime:      15,
-				BGPIdentifier: 2571,
+				BGPIdentifier: 169090600,
 				OptParmLen:    0,
 			},
 		},
@@ -1171,9 +1154,9 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Valid header
 			testNum:  1,
-			input:    []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19, KeepaliveMsg},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 19, KeepaliveMsg},
 			wantFail: false,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 19,
 				Type:   KeepaliveMsg,
 			},
@@ -1181,9 +1164,9 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Invalid length too short
 			testNum:  2,
-			input:    []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 18, KeepaliveMsg},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 18, KeepaliveMsg},
 			wantFail: true,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 18,
 				Type:   KeepaliveMsg,
 			},
@@ -1191,9 +1174,9 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Invalid length too long
 			testNum:  3,
-			input:    []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 16, 1, KeepaliveMsg},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 16, 1, KeepaliveMsg},
 			wantFail: true,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 18,
 				Type:   KeepaliveMsg,
 			},
@@ -1201,9 +1184,9 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Invalid message type 5
 			testNum:  4,
-			input:    []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19, 5},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 19, 5},
 			wantFail: true,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 19,
 				Type:   KeepaliveMsg,
 			},
@@ -1211,9 +1194,9 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Invalid message type 0
 			testNum:  5,
-			input:    []byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19, 0},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 19, 0},
 			wantFail: true,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 19,
 				Type:   KeepaliveMsg,
 			},
@@ -1223,7 +1206,7 @@ func TestDecodeHeader(t *testing.T) {
 			testNum:  6,
 			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19, KeepaliveMsg},
 			wantFail: true,
-			expected: BGPHeader{
+			expected: &BGPHeader{
 				Length: 19,
 				Type:   KeepaliveMsg,
 			},
