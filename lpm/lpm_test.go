@@ -353,7 +353,6 @@ func TestInsertBefore(t *testing.T) {
 
 	for _, test := range tests {
 		n := newNode(test.a, test.a.Pfxlen(), false)
-		fmt.Printf("n.skip: %d\n", n.skip)
 		n = n.insertBefore(test.b, test.b.Pfxlen())
 		assert.Equal(t, test.expected, n)
 	}

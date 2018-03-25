@@ -77,6 +77,21 @@ func TestGetSupernet(t *testing.T) {
 				pfxlen: 7,
 			},
 		},
+		{
+			name: "Test 2",
+			a: &Prefix{
+				addr:   167772160, // 10.0.0.0/8
+				pfxlen: 8,
+			},
+			b: &Prefix{
+				addr:   3232235520, // 192.168.0.0/24
+				pfxlen: 24,
+			},
+			expected: &Prefix{
+				addr:   0, // 0.0.0.0/0
+				pfxlen: 0,
+			},
+		},
 	}
 
 	for _, test := range tests {
