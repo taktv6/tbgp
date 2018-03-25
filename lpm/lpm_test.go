@@ -165,26 +165,54 @@ func TestLPM(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	tests := []struct {
-		name     string
-		prefixes []*net.Prefix
-		needle   *net.Prefix
-		expected *net.Prefix
+		name          string
+		moreSpecifics bool
+		prefixes      []*net.Prefix
+		needle        *net.Prefix
+		expected      []*net.Prefix
 	}{
 		{
-			name: "Test 1",
+			name:          "Test 1",
+			moreSpecifics: true,
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+				net.NewPfx(167772160, 10), // 10.0.0.0/10
+			},
+			needle: net.NewPfx(167772160, 8), // 10.0.0.0/8
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(167772160, 12), // 10.0.0.0
+			},
+		},
+		{
+			name: "Test 2",
 			prefixes: []*net.Prefix{
 				net.NewPfx(167772160, 8),  // 10.0.0.0
 				net.NewPfx(191134464, 24), // 11.100.123.0/24
 				net.NewPfx(167772160, 12), // 10.0.0.0
 				net.NewPfx(167772160, 10), // 10.0.0.0
 			},
-			needle:   net.NewPfx(167772160, 8), // 10.0.0.0/8
-			expected: net.NewPfx(167772160, 8), // 10.0.0.0/8
+			needle: net.NewPfx(167772160, 8), // 10.0.0.0/8
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8), // 10.0.0.0/8
+			},
 		},
 		{
-			name:     "Test 2",
+			name:     "Test 3",
 			prefixes: []*net.Prefix{},
 			needle:   net.NewPfx(167772160, 32), // 10.0.0.0/32
+			expected: nil,
+		},
+		{
+			name: "Test 4: Get Dummy",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+			needle:   net.NewPfx(167772160, 7), // 10.0.0.0/7
 			expected: nil,
 		},
 	}
@@ -194,7 +222,7 @@ func TestGet(t *testing.T) {
 		for _, pfx := range test.prefixes {
 			lpm.Insert(pfx)
 		}
-		p := lpm.Get(test.needle, false)
+		p := lpm.Get(test.needle, test.moreSpecifics)
 
 		if p == nil {
 			if test.expected != nil {
@@ -203,7 +231,7 @@ func TestGet(t *testing.T) {
 			continue
 		}
 
-		assert.Equal(t, test.expected, p[0])
+		assert.Equal(t, test.expected, p)
 	}
 }
 

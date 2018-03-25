@@ -1,8 +1,6 @@
 package lpm
 
 import (
-	"fmt"
-
 	"github.com/taktv6/tbgp/net"
 )
 
@@ -51,8 +49,11 @@ func (lpm *LPM) Get(pfx *net.Prefix, moreSpecifics bool) (res []*net.Prefix) {
 
 	node := lpm.root.get(pfx)
 	if moreSpecifics {
-		node.dumpPfxs(res)
-		return res
+		return node.dumpPfxs(res)
+	}
+
+	if node == nil {
+		return nil
 	}
 
 	return []*net.Prefix{
@@ -91,18 +92,20 @@ func (n *node) lpm(needle *net.Prefix, res *[]*net.Prefix) {
 	n.h.lpm(needle, res)
 }
 
-func (n *node) dumpPfxs(res []*net.Prefix) {
+func (n *node) dumpPfxs(res []*net.Prefix) []*net.Prefix {
 	if !n.dummy {
 		res = append(res, n.pfx)
 	}
 
 	if n.l != nil {
-		n.l.dumpPfxs(res)
+		res = n.l.dumpPfxs(res)
 	}
 
 	if n.h != nil {
-		n.h.dumpPfxs(res)
+		res = n.h.dumpPfxs(res)
 	}
+
+	return res
 }
 
 func (n *node) get(pfx *net.Prefix) *node {
@@ -205,22 +208,6 @@ func (n *node) insertBefore(pfx *net.Prefix, level uint8) *node {
 	}
 
 	return new
-}
-
-func (n *node) dump() {
-	if n.pfx != nil {
-		fmt.Printf("Prefix: %s (skip = %d, dummy = %v)\n", n.pfx.String(), n.skip, n.dummy)
-	}
-
-	if n.l != nil {
-		fmt.Printf("<--- LEFT of %s\n", n.pfx.String())
-		n.l.dump()
-	}
-
-	if n.h != nil {
-		fmt.Printf("---> RIGHT of %s\n", n.pfx.String())
-		n.h.dump()
-	}
 }
 
 func getBitUint32(x uint32, pos uint8) bool {
