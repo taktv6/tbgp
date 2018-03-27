@@ -68,7 +68,7 @@ func (lpm *LPM) Insert(pfx *net.Prefix) {
 		return
 	}
 
-	lpm.root = lpm.root.insert(pfx, lpm.root.pfx.Pfxlen()+1)
+	lpm.root = lpm.root.insert(pfx)
 }
 
 func (n *node) lpm(needle *net.Prefix, res *[]*net.Prefix) {
@@ -135,7 +135,7 @@ func (n *node) get(pfx *net.Prefix) *node {
 	return n.h.get(pfx)
 }
 
-func (n *node) insert(pfx *net.Prefix, level uint8) *node {
+func (n *node) insert(pfx *net.Prefix) *node {
 	if *n.pfx == *pfx {
 		return n
 	}
@@ -143,41 +143,45 @@ func (n *node) insert(pfx *net.Prefix, level uint8) *node {
 	// is pfx NOT a subnet of this node?
 	if !n.pfx.Contains(pfx) {
 		if pfx.Contains(n.pfx) {
-			return n.insertBefore(pfx, level)
+			return n.insertBefore(pfx, n.pfx.Pfxlen()-n.skip-1)
 		}
 
 		return n.newSuperNode(pfx)
 	}
 
 	// pfx is a subnet of this node
-	b := getBitUint32(pfx.Addr(), level)
+	b := getBitUint32(pfx.Addr(), n.pfx.Pfxlen()+1)
 	if !b {
-		return n.insertLow(pfx, level)
+		return n.insertLow(pfx, n.pfx.Pfxlen())
 	}
-	return n.insertHigh(pfx, level)
+	return n.insertHigh(pfx, n.pfx.Pfxlen())
 }
 
-func (n *node) insertLow(pfx *net.Prefix, level uint8) *node {
+func (n *node) insertLow(pfx *net.Prefix, parentPfxLen uint8) *node {
 	if n.l == nil {
-		n.l = newNode(pfx, pfx.Pfxlen()-level, false)
+		n.l = newNode(pfx, pfx.Pfxlen()-parentPfxLen-1, false)
 		return n
 	}
-	n.l = n.l.insert(pfx, level+1)
+	n.l = n.l.insert(pfx)
 	return n
 }
 
-func (n *node) insertHigh(pfx *net.Prefix, level uint8) *node {
+func (n *node) insertHigh(pfx *net.Prefix, parentPfxLen uint8) *node {
 	if n.h == nil {
-		n.h = newNode(pfx, pfx.Pfxlen()-level, false)
+		n.h = newNode(pfx, pfx.Pfxlen()-parentPfxLen-1, false)
 		return n
 	}
-	n.h = n.h.insert(pfx, level+1)
+	n.h = n.h.insert(pfx)
 	return n
 }
 
 func (n *node) newSuperNode(pfx *net.Prefix) *node {
 	superNet := pfx.GetSupernet(n.pfx)
-	pseudoNode := newNode(superNet, superNet.Pfxlen(), true)
+
+	pfxLenDiff := n.pfx.Pfxlen() - superNet.Pfxlen()
+	skip := n.skip - pfxLenDiff
+
+	pseudoNode := newNode(superNet, skip, true)
 	pseudoNode.insertChildren(n, pfx)
 	return pseudoNode
 }
@@ -203,16 +207,20 @@ func (n *node) insertChildren(old *node, new *net.Prefix) {
 	}
 }
 
-func (n *node) insertBefore(pfx *net.Prefix, level uint8) *node {
+func (n *node) insertBefore(pfx *net.Prefix, parentPfxLen uint8) *node {
 	tmp := n
-	new := newNode(pfx, pfx.Pfxlen()-level+1, false)
-	b := getBitUint32(pfx.Addr(), level)
+
+	pfxLenDiff := n.pfx.Pfxlen() - pfx.Pfxlen()
+	skip := n.skip - pfxLenDiff
+	new := newNode(pfx, skip, false)
+
+	b := getBitUint32(pfx.Addr(), parentPfxLen) // TODO: Is this correct?
 	if !b {
 		new.l = tmp
-		new.l.skip = tmp.pfx.Pfxlen() - level - 1
+		new.l.skip = tmp.pfx.Pfxlen() - pfx.Pfxlen() - 1
 	} else {
 		new.h = tmp
-		new.h.skip = tmp.pfx.Pfxlen() - level - 1
+		new.h.skip = tmp.pfx.Pfxlen() - pfx.Pfxlen() - 1
 	}
 
 	return new

@@ -82,7 +82,7 @@ func TestInsert(t *testing.T) {
 			},
 		},
 		{
-			name: "Insert disjunct prefixes plus one child",
+			name: "Insert disjunct prefixes plus one child low",
 			prefixes: []*net.Prefix{
 				net.NewPfx(167772160, 8),  // 10.0.0.0
 				net.NewPfx(191134464, 24), // 11.100.123.0/24
@@ -107,6 +107,39 @@ func TestInsert(t *testing.T) {
 				h: &node{
 					pfx:  net.NewPfx(191134464, 24), // 10.0.0.0/8
 					skip: 16,
+				},
+			},
+		},
+		{
+			name: "Insert disjunct prefixes plus one child high",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(191134592, 25), // 11.100.123.128/25
+			},
+			expected: &node{
+				pfx:   net.NewPfx(167772160, 7), // 10.0.0.0/7
+				skip:  7,
+				dummy: true,
+				l: &node{
+					pfx: net.NewPfx(167772160, 8), // 10.0.0.0/8
+					l: &node{
+						skip: 1,
+						pfx:  net.NewPfx(167772160, 10), // 10.0.0.0/10
+						l: &node{
+							skip: 1,
+							pfx:  net.NewPfx(167772160, 12), // 10.0.0.0
+						},
+					},
+				},
+				h: &node{
+					pfx:  net.NewPfx(191134464, 24), //11.100.123.0/24
+					skip: 16,
+					h: &node{
+						pfx: net.NewPfx(191134592, 25), //11.100.123.128/25
+					},
 				},
 			},
 		},
@@ -276,6 +309,46 @@ func TestNewSuperNode(t *testing.T) {
 		n := newNode(test.a, test.a.Pfxlen(), false)
 		n = n.newSuperNode(test.b)
 		assert.Equal(t, test.expected, n)
+	}
+}
+
+func TestDumpPfxs(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefixes []*net.Prefix
+		expected []*net.Prefix
+	}{
+
+		{
+			name:     "Test 1: Empty node",
+			expected: nil,
+		},
+		{
+			name: "Test 2: ",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+				net.NewPfx(167772160, 10), // 10.0.0.0/10
+			},
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(167772160, 10), // 10.0.0.0/10
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+		},
+	}
+
+	for _, test := range tests {
+		lpm := New()
+		for _, pfx := range test.prefixes {
+			lpm.Insert(pfx)
+		}
+
+		res := make([]*net.Prefix, 0)
+		r := lpm.root.dumpPfxs(res)
+		assert.Equal(t, test.expected, r)
 	}
 }
 
