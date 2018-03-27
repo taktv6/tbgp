@@ -183,6 +183,20 @@ func TestLPM(t *testing.T) {
 			needle:   net.NewPfx(167772160, 32), // 10.0.0.0/32
 			expected: nil,
 		},
+		{
+			name: "Test 3",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+			},
+			needle: net.NewPfx(167772160, 10), // 10.0.0.0/10
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -258,6 +272,24 @@ func TestGet(t *testing.T) {
 			expected: []*net.Prefix{
 				net.NewPfx(191134464, 24), // 11.100.123.0/24
 			},
+		},
+		{
+			name: "Test 4: Get nonexistent #1",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+			needle:   net.NewPfx(167772160, 10), // 10.0.0.0/10
+			expected: nil,
+		},
+		{
+			name: "Test 4: Get nonexistent #2",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+			},
+			needle:   net.NewPfx(167772160, 10), // 10.0.0.0/10
+			expected: nil,
 		},
 	}
 
