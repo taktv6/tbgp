@@ -1,8 +1,6 @@
 package lpm
 
 import (
-	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/taktv6/tbgp/net"
@@ -172,7 +170,7 @@ func TestGet(t *testing.T) {
 		expected      []*net.Prefix
 	}{
 		{
-			name:          "Test 1",
+			name:          "Test 1: Search pfx and dump more specifics",
 			moreSpecifics: true,
 			prefixes: []*net.Prefix{
 				net.NewPfx(167772160, 8),  // 10.0.0.0/8
@@ -188,9 +186,9 @@ func TestGet(t *testing.T) {
 			},
 		},
 		{
-			name: "Test 2",
+			name: "Test 2: Search pfx and don't dump more specifics",
 			prefixes: []*net.Prefix{
-				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
 				net.NewPfx(191134464, 24), // 11.100.123.0/24
 				net.NewPfx(167772160, 12), // 10.0.0.0
 				net.NewPfx(167772160, 10), // 10.0.0.0
@@ -215,6 +213,19 @@ func TestGet(t *testing.T) {
 			needle:   net.NewPfx(167772160, 7), // 10.0.0.0/7
 			expected: nil,
 		},
+		{
+			name: "Test 5",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+			},
+			needle: net.NewPfx(191134464, 24), // 10.0.0.0/8
+			expected: []*net.Prefix{
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -226,7 +237,7 @@ func TestGet(t *testing.T) {
 
 		if p == nil {
 			if test.expected != nil {
-				t.Errorf("Unexpected nil result for test %s", test.name)
+				t.Errorf("Unexpected nil result for test %q", test.name)
 			}
 			continue
 		}
@@ -244,14 +255,14 @@ func TestNewSuperNode(t *testing.T) {
 	}{
 		{
 			name: "Test 1",
-			a:    net.NewPfx(167772160, 8),  // 10.0.0.0
+			a:    net.NewPfx(167772160, 8),  // 10.0.0.0/8
 			b:    net.NewPfx(191134464, 24), // 11.100.123.0/24
 			expected: &node{
-				pfx:   net.NewPfx(167772160, 7), // 10.0.0.0
+				pfx:   net.NewPfx(167772160, 7), // 10.0.0.0/7
 				skip:  7,
 				dummy: true,
 				l: &node{
-					pfx: net.NewPfx(167772160, 8), // 10.0.0.0
+					pfx: net.NewPfx(167772160, 8), // 10.0.0.0/8
 				},
 				h: &node{
 					pfx:  net.NewPfx(191134464, 24), //11.100.123.0/24
@@ -276,15 +287,20 @@ func TestGetBitUint32(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "test 3",
-			input:    16777216,
+			name:     "test 1",
+			input:    167772160, // 10.0.0.0
+			offset:   8,
+			expected: false,
+		},
+		{
+			name:     "test 2",
+			input:    184549376, // 11.0.0.0
 			offset:   8,
 			expected: true,
 		},
 	}
 
 	for _, test := range tests {
-		fmt.Println(strconv.FormatInt(int64(test.input), 2))
 		b := getBitUint32(test.input, test.offset)
 		if b != test.expected {
 			t.Errorf("%s: Unexpected failure: Bit %d of %d is %v. Expected %v", test.name, test.offset, test.input, b, test.expected)

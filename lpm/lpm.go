@@ -93,6 +93,10 @@ func (n *node) lpm(needle *net.Prefix, res *[]*net.Prefix) {
 }
 
 func (n *node) dumpPfxs(res []*net.Prefix) []*net.Prefix {
+	if n == nil {
+		return nil
+	}
+
 	if !n.dummy {
 		res = append(res, n.pfx)
 	}
@@ -109,6 +113,10 @@ func (n *node) dumpPfxs(res []*net.Prefix) []*net.Prefix {
 }
 
 func (n *node) get(pfx *net.Prefix) *node {
+	if n == nil {
+		return nil
+	}
+
 	if *n.pfx == *pfx {
 		if n.dummy {
 			return nil
@@ -120,8 +128,8 @@ func (n *node) get(pfx *net.Prefix) *node {
 		return nil
 	}
 
-	b := getBitUint32(pfx.Addr(), n.pfx.Pfxlen())
-	if b {
+	b := getBitUint32(pfx.Addr(), n.pfx.Pfxlen()+1)
+	if !b {
 		return n.l.get(pfx)
 	}
 	return n.h.get(pfx)
