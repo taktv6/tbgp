@@ -450,7 +450,7 @@ func TestInsertBefore(t *testing.T) {
 					pfx:  net.NewPfx(167772160, 10), // 10.0.0.0
 					skip: 1,
 				},
-				skip: 1,
+				skip: 8,
 			},
 		},
 		{
@@ -463,7 +463,7 @@ func TestInsertBefore(t *testing.T) {
 					pfx:  net.NewPfx(184549376, 8), // 10.0.0.0
 					skip: 0,
 				},
-				skip: 1,
+				skip: 7,
 			},
 		},
 	}
