@@ -81,6 +81,25 @@ func TestRemove(t *testing.T) {
 				net.NewPfx(191134592, 25), // 11.100.123.128/25
 			},
 		},
+		{
+			name: "Test 5",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(191134592, 25), // 11.100.123.128/25
+			},
+			remove: []*net.Prefix{
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+			},
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(191134592, 25), // 11.100.123.128/25
+			},
+		},
 	}
 
 	for _, test := range tests {
