@@ -41,6 +41,10 @@ func (lpm *LPM) LPM(pfx *net.Prefix) (res []*net.Prefix) {
 	return res
 }
 
+func (lpm *LPM) Remove(pfx *net.Prefix) {
+	lpm.root.remove(pfx)
+}
+
 // Get get's prefix pfx from the LPM
 func (lpm *LPM) Get(pfx *net.Prefix, moreSpecifics bool) (res []*net.Prefix) {
 	if lpm.root == nil {
@@ -69,6 +73,28 @@ func (lpm *LPM) Insert(pfx *net.Prefix) {
 	}
 
 	lpm.root = lpm.root.insert(pfx)
+}
+
+func (n *node) remove(pfx *net.Prefix) {
+	if n == nil {
+		return
+	}
+
+	if *n.pfx == *pfx {
+		if n.dummy {
+			return
+		}
+		n.dummy = true
+		return
+	}
+
+	b := getBitUint32(pfx.Addr(), n.pfx.Pfxlen()+1)
+	if !b {
+		n.l.remove(pfx)
+		return
+	}
+	n.h.remove(pfx)
+	return
 }
 
 func (n *node) lpm(needle *net.Prefix, res *[]*net.Prefix) {
@@ -137,6 +163,7 @@ func (n *node) get(pfx *net.Prefix) *node {
 
 func (n *node) insert(pfx *net.Prefix) *node {
 	if *n.pfx == *pfx {
+		n.dummy = false
 		return n
 	}
 
@@ -224,6 +251,25 @@ func (n *node) insertBefore(pfx *net.Prefix, parentPfxLen uint8) *node {
 	}
 
 	return new
+}
+
+func (lpm *LPM) Dump() []*net.Prefix {
+	res := make([]*net.Prefix, 0)
+	return lpm.root.dump(res)
+}
+
+func (n *node) dump(res []*net.Prefix) []*net.Prefix {
+	if n == nil {
+		return res
+	}
+
+	if !n.dummy {
+		res = append(res, n.pfx)
+	}
+
+	res = n.l.dump(res)
+	res = n.h.dump(res)
+	return res
 }
 
 func getBitUint32(x uint32, pos uint8) bool {

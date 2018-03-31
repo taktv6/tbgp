@@ -15,6 +15,89 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestRemove(t *testing.T) {
+	tests := []struct {
+		name     string
+		prefixes []*net.Prefix
+		remove   []*net.Prefix
+		expected []*net.Prefix
+	}{
+		{
+			name: "Test 1",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8), // 10.0.0.0
+				net.NewPfx(167772160, 9), // 10.0.0.0
+				net.NewPfx(176160768, 9), // 10.128.0.0
+			},
+			remove: []*net.Prefix{
+				net.NewPfx(167772160, 8), // 10.0.0.0
+			},
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 9), // 10.0.0.0
+				net.NewPfx(176160768, 9), // 10.128.0.0
+			},
+		},
+		{
+			name: "Test 2",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+				net.NewPfx(167772160, 10), // 10.0.0.0/10
+			},
+			remove: []*net.Prefix{
+				net.NewPfx(167772160, 7), // 10.0.0.0/7
+			},
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0/8
+				net.NewPfx(167772160, 10), // 10.0.0.0/10
+				net.NewPfx(167772160, 12), // 10.0.0.0/12
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+		},
+		{
+			name: "Test 3",
+			remove: []*net.Prefix{
+				net.NewPfx(167772160, 7), // 10.0.0.0/7
+			},
+			expected: []*net.Prefix{},
+		},
+		{
+			name: "Test 4",
+			prefixes: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(191134592, 25), // 11.100.123.128/25
+			},
+			remove: []*net.Prefix{
+				net.NewPfx(191134464, 24), // 11.100.123.0/24
+			},
+			expected: []*net.Prefix{
+				net.NewPfx(167772160, 8),  // 10.0.0.0
+				net.NewPfx(167772160, 10), // 10.0.0.0
+				net.NewPfx(167772160, 12), // 10.0.0.0
+				net.NewPfx(191134592, 25), // 11.100.123.128/25
+			},
+		},
+	}
+
+	for _, test := range tests {
+		lpm := New()
+		for _, pfx := range test.prefixes {
+			lpm.Insert(pfx)
+		}
+
+		for _, pfx := range test.remove {
+			lpm.Remove(pfx)
+		}
+
+		res := lpm.Dump()
+		assert.Equal(t, test.expected, res)
+	}
+}
+
 func TestInsert(t *testing.T) {
 	tests := []struct {
 		name     string

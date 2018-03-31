@@ -9,7 +9,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/taktv6/tbgp/config"
+	"github.com/taktv6/tbgp/lpm"
+	tnet "github.com/taktv6/tbgp/net"
 	"github.com/taktv6/tbgp/packet"
+	"github.com/taktv6/tflow2/convert"
 	tomb "gopkg.in/tomb.v2"
 )
 
@@ -79,6 +82,9 @@ type FSM struct {
 	msgRecvCh     chan msgRecvMsg
 	msgRecvFailCh chan msgRecvErr
 	stopMsgRecvCh chan struct{}
+
+	adjRibIn  *lpm.LPM
+	adjRibOut *lpm.LPM
 }
 
 type msgRecvMsg struct {
@@ -195,6 +201,8 @@ func (fsm *FSM) main() error {
 }
 
 func (fsm *FSM) idle() int {
+	fsm.adjRibIn = nil
+	fsm.adjRibOut = nil
 	for {
 		select {
 		case c := <-fsm.conCh:
@@ -638,6 +646,18 @@ func (fsm *FSM) openConfirmTCPFail(err error) int {
 }
 
 func (fsm *FSM) established() int {
+	fsm.adjRibIn = lpm.New()
+	go func() {
+		for {
+			time.Sleep(time.Second * 10)
+			fmt.Printf("Dumping AdjRibIn\n")
+			pfxs := fsm.adjRibIn.Dump()
+			for _, pfx := range pfxs {
+				fmt.Printf("LPM: %s\n", pfx.String())
+			}
+		}
+	}()
+
 	for {
 		select {
 		case e := <-fsm.eventCh:
@@ -698,6 +718,23 @@ func (fsm *FSM) established() int {
 					fsm.holdTimer.Reset(time.Second * fsm.holdTime)
 				}
 				msg.Dump()
+
+				u := msg.Body.(*packet.BGPUpdate)
+
+				for r := u.WithdrawnRoutes; r != nil; r = r.Next {
+					x := r.IP.([4]byte)
+					pfx := tnet.NewPfx(convert.Uint32b(x[:]), r.Pfxlen)
+					fmt.Printf("LPM: Removing prefix %s\n", pfx.String())
+					fsm.adjRibIn.Remove(pfx)
+				}
+
+				for r := u.NLRI; r != nil; r = r.Next {
+					x := r.IP.([4]byte)
+					pfx := tnet.NewPfx(convert.Uint32b(x[:]), r.Pfxlen)
+					fmt.Printf("LPM: Adding prefix %s\n", pfx.String())
+					fsm.adjRibIn.Insert(pfx)
+				}
+
 				continue
 			case packet.KeepaliveMsg:
 				if fsm.holdTime != 0 {
