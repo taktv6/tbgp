@@ -331,7 +331,13 @@ func TestDecodeNotificationMsg(t *testing.T) {
 }
 
 func TestDecodeUpdateMsg(t *testing.T) {
-	tests := []test{
+	tests := []struct {
+		testNum        int
+		input          []byte
+		explicitLength uint16
+		wantFail       bool
+		expected       interface{}
+	}{
 		{
 			// 2 withdraws only, valid update
 			testNum:  1,
@@ -1165,11 +1171,23 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			},
 			wantFail: true,
 		},
+		{
+			testNum: 15, // Cut at Total Path Attributes Length
+			input: []byte{
+				0, 0, // No Withdraws
+			},
+			explicitLength: 5,
+			wantFail:       true,
+		},
 	}
 
 	for _, test := range tests {
 		buf := bytes.NewBuffer(test.input)
-		msg, err := decodeUpdateMsg(buf, uint16(len(test.input)))
+		l := test.explicitLength
+		if l == 0 {
+			l = uint16(len(test.input))
+		}
+		msg, err := decodeUpdateMsg(buf, l)
 
 		if err != nil && !test.wantFail {
 			t.Errorf("Unexpected error in test %d: %v", test.testNum, err)
