@@ -1143,6 +1143,11 @@ func TestDecodeUpdateMsg(t *testing.T) {
 			},
 			wantFail: true,
 		},
+		{
+			testNum:  12, // Empty buffer
+			input:    []byte{},
+			wantFail: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -1164,6 +1169,36 @@ func TestDecodeUpdateMsg(t *testing.T) {
 		}
 
 		assert.Equal(t, test.expected, msg)
+	}
+}
+
+func TestDecodeMsgBody(t *testing.T) {
+	tests := []struct {
+		name     string
+		buffer   *bytes.Buffer
+		msgType  uint8
+		length   uint16
+		wantFail bool
+		expected interface{}
+	}{
+		{
+			name:     "Unknown msgType",
+			msgType:  5,
+			wantFail: true,
+		},
+	}
+
+	for _, test := range tests {
+		res, err := decodeMsgBody(test.buffer, test.msgType, test.length)
+		if test.wantFail && err == nil {
+			t.Errorf("Expected error dit not happen in test %q", test.name)
+		}
+
+		if !test.wantFail && err != nil {
+			t.Errorf("Unexpected error in test %q: %v", test.name, err)
+		}
+
+		assert.Equal(t, test.expected, res)
 	}
 }
 
