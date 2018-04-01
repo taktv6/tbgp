@@ -50,7 +50,7 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 		return msg, err
 	}
 
-	msg.WithdrawnRoutes, err = decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
+	msg.WithdrawnRoutes, err = decodeNLRIs(buf, uint16(msg.WithdrawnRoutesLen))
 	if err != nil {
 		return msg, err
 	}
@@ -67,7 +67,7 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 
 	nlriLen := uint16(l) - 4 - uint16(msg.TotalPathAttrLen) - uint16(msg.WithdrawnRoutesLen)
 	if nlriLen > 0 {
-		msg.NLRI, err = decodeNLRI(buf, nlriLen)
+		msg.NLRI, err = decodeNLRIs(buf, nlriLen)
 		if err != nil {
 			return msg, err
 		}
@@ -76,50 +76,56 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 	return msg, nil
 }
 
-func decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
-	fmt.Printf("Decoding NLRI %d bytes\n", l)
+func decodeNLRIs(buf *bytes.Buffer, length uint16) (*NLRI, error) {
 	var ret *NLRI
 	var eol *NLRI
 	var nlri *NLRI
-	var toCopy uint8
-	var j uint8
 	var err error
+	var consumed uint8
 	p := uint16(0)
 
-	for p < l {
-		nlri = &NLRI{}
+	for p < length {
+		nlri, consumed, err = decodeNLRI(buf)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to decode NLRI: %v", err)
+		}
+		p += uint16(consumed)
+
 		if ret == nil {
 			ret = nlri
 			eol = nlri
-		} else {
-			eol.Next = nlri
-			eol = nlri
+			continue
 		}
 
-		err = decode(buf, []interface{}{&nlri.Pfxlen})
-		if err != nil {
-			return nil, err
-		}
-		p++
-
-		toCopy = uint8(math.Ceil(float64(nlri.Pfxlen) / float64(OctetLen)))
-		var addr [4]byte
-		for j = 0; j < net.IPv4len%OctetLen; j++ {
-			if j < toCopy {
-				err = decode(buf, []interface{}{&addr[j]})
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				addr[j] = 0
-			}
-		}
-		nlri.IP = addr
-		p += uint16(toCopy)
-
+		eol.Next = nlri
+		eol = nlri
 	}
 
 	return ret, nil
+}
+
+func decodeNLRI(buf *bytes.Buffer) (*NLRI, uint8, error) {
+	var addr [4]byte
+	nlri := &NLRI{}
+
+	err := decode(buf, []interface{}{&nlri.Pfxlen})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	toCopy := uint8(math.Ceil(float64(nlri.Pfxlen) / float64(OctetLen)))
+	for i := uint8(0); i < net.IPv4len%OctetLen; i++ {
+		if i < toCopy {
+			err := decode(buf, []interface{}{&addr[i]})
+			if err != nil {
+				return nil, 0, err
+			}
+		} else {
+			addr[i] = 0
+		}
+	}
+	nlri.IP = addr
+	return nlri, toCopy + 1, nil
 }
 
 func decodePathAttrs(buf *bytes.Buffer, tpal uint16) (*PathAttribute, error) {
