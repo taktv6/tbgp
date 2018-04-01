@@ -52,7 +52,7 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 
 	msg.WithdrawnRoutes, err = decodeNLRI(buf, uint16(msg.WithdrawnRoutesLen))
 	if err != nil {
-		return msg, nil
+		return msg, err
 	}
 
 	err = decode(buf, []interface{}{&msg.TotalPathAttrLen})
@@ -77,6 +77,7 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 }
 
 func decodeNLRI(buf *bytes.Buffer, l uint16) (*NLRI, error) {
+	fmt.Printf("Decoding NLRI %d bytes\n", l)
 	var ret *NLRI
 	var eol *NLRI
 	var nlri *NLRI

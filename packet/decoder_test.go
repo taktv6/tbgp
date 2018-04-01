@@ -187,6 +187,43 @@ func TestDecode(t *testing.T) {
 				},
 			},
 		},
+		{
+			testNum: 6,
+			input: []byte{
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
+				0, 28, // Length
+				2,                               // Type = Update
+				0, 5, 8, 10, 16, 192, 168, 0, 0, // 2 withdraws
+			},
+			wantFail: false,
+			expected: &BGPMessage{
+				Header: &BGPHeader{
+					Length: 28,
+					Type:   2,
+				},
+				Body: &BGPUpdate{
+					WithdrawnRoutesLen: 5,
+					WithdrawnRoutes: &NLRI{
+						IP:     [4]byte{10, 0, 0, 0},
+						Pfxlen: 8,
+						Next: &NLRI{
+							IP:     [4]byte{192, 168, 0, 0},
+							Pfxlen: 16,
+						},
+					},
+				},
+			},
+		},
+		{
+			testNum: 7,
+			input: []byte{
+				255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, // Marker
+				0, 28, // Length
+				5,                               // Type = Invalid
+				0, 5, 8, 10, 16, 192, 168, 0, 0, // Some more stuff
+			},
+			wantFail: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -1098,6 +1135,13 @@ func TestDecodeUpdateMsg(t *testing.T) {
 					IP:     [4]byte{11, 0, 0, 0},
 				},
 			},
+		},
+		{
+			testNum: 11, // Incomplete Withdraw
+			input: []byte{
+				0, 5, // Length
+			},
+			wantFail: true,
 		},
 	}
 
