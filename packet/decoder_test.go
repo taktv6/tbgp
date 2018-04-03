@@ -358,7 +358,10 @@ func TestDecodeUpdateMsg(t *testing.T) {
 		{
 			// 2 withdraws with one path attribute (ORIGIN), valid update
 			testNum: 2,
-			input: []byte{0, 5, 8, 10, 16, 192, 168,
+			input: []byte{
+				0, 5, // Withdrawn Routes Length
+				8, 10, // 10.0.0.0/8
+				16, 192, 168, // 192.168.0.0/16
 				0, 5, // Total Path Attribute Length
 				255,  // Attribute flags
 				1,    // Attribute Type code
@@ -1328,127 +1331,6 @@ func TestDecodeHeader(t *testing.T) {
 	}
 
 	genericTest(_decodeHeader, tests, t)
-}
-
-func TestDecodeNLRIs(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		wantFail bool
-		expected *NLRI
-	}{
-		{
-			name: "Valid NRLI #1",
-			input: []byte{
-				24, 192, 168, 0,
-				8, 10,
-				17, 172, 16, 0,
-			},
-			wantFail: false,
-			expected: &NLRI{
-				IP:     [4]byte{192, 168, 0, 0},
-				Pfxlen: 24,
-				Next: &NLRI{
-					IP:     [4]byte{10, 0, 0, 0},
-					Pfxlen: 8,
-					Next: &NLRI{
-						IP:     [4]byte{172, 16, 0, 0},
-						Pfxlen: 17,
-					},
-				},
-			},
-		},
-		{
-			name: "Invalid NRLI #1",
-			input: []byte{
-				24, 192, 168, 0,
-				8, 10,
-				17, 172, 16,
-			},
-			wantFail: true,
-		},
-	}
-
-	for _, test := range tests {
-		buf := bytes.NewBuffer(test.input)
-		res, err := decodeNLRIs(buf, uint16(len(test.input)))
-
-		if test.wantFail && err == nil {
-			t.Errorf("Expected error did not happen for test %q", test.name)
-		}
-
-		if !test.wantFail && err != nil {
-			t.Errorf("Unexpected failure for test %q: %v", test.name, err)
-		}
-
-		assert.Equal(t, test.expected, res)
-	}
-}
-
-func TestDecodeNLRI(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		wantFail bool
-		expected *NLRI
-	}{
-		{
-			name: "Valid NRLI #1",
-			input: []byte{
-				24, 192, 168, 0,
-			},
-			wantFail: false,
-			expected: &NLRI{
-				IP:     [4]byte{192, 168, 0, 0},
-				Pfxlen: 24,
-			},
-		},
-		{
-			name: "Valid NRLI #2",
-			input: []byte{
-				25, 192, 168, 0, 128,
-			},
-			wantFail: false,
-			expected: &NLRI{
-				IP:     [4]byte{192, 168, 0, 128},
-				Pfxlen: 25,
-			},
-		},
-		{
-			name: "Incomplete NLRI #1",
-			input: []byte{
-				25, 192, 168, 0,
-			},
-			wantFail: true,
-		},
-		{
-			name: "Incomplete NLRI #2",
-			input: []byte{
-				25,
-			},
-			wantFail: true,
-		},
-		{
-			name:     "Empty input",
-			input:    []byte{},
-			wantFail: true,
-		},
-	}
-
-	for _, test := range tests {
-		buf := bytes.NewBuffer(test.input)
-		res, _, err := decodeNLRI(buf)
-
-		if test.wantFail && err == nil {
-			t.Errorf("Expected error did not happen for test %q", test.name)
-		}
-
-		if !test.wantFail && err != nil {
-			t.Errorf("Unexpected failure for test %q: %v", test.name, err)
-		}
-
-		assert.Equal(t, test.expected, res)
-	}
 }
 
 func genericTest(f decodeFunc, tests []test, t *testing.T) {
