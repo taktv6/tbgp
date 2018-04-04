@@ -161,6 +161,15 @@ func TestDecodePathAttr(t *testing.T) {
 			},
 			wantFail: true,
 		},
+		{
+			name: "Not supported attribute",
+			input: []byte{
+				0,   // Attr. Flags
+				111, // Attr. Type Code
+				4,   // Attr. Length
+			},
+			wantFail: true,
+		},
 	}
 
 	for _, test := range tests {
@@ -651,10 +660,11 @@ func TestSetLength(t *testing.T) {
 
 func TestDecodeUint32(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    []byte
-		wantFail bool
-		expected uint32
+		name           string
+		input          []byte
+		wantFail       bool
+		explicitLength uint16
+		expected       uint32
 	}{
 		{
 			name:     "Valid input",
@@ -667,6 +677,12 @@ func TestDecodeUint32(t *testing.T) {
 			expected: 257,
 		},
 		{
+			name:           "Valid input with additional crap and invalid length",
+			input:          []byte{0, 0, 1, 1, 200},
+			explicitLength: 8,
+			wantFail:       true,
+		},
+		{
 			name:     "Invalid input",
 			input:    []byte{0, 0, 1},
 			wantFail: true,
@@ -674,8 +690,12 @@ func TestDecodeUint32(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		l := uint16(len(test.input))
+		if test.explicitLength > 0 {
+			l = test.explicitLength
+		}
 		pa := &PathAttribute{
-			Length: uint16(len(test.input)),
+			Length: l,
 		}
 		res, err := pa.decodeUint32(bytes.NewBuffer(test.input))
 
