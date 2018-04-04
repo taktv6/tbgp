@@ -76,11 +76,6 @@ func decodeUpdateMsg(buf *bytes.Buffer, l uint16) (*BGPUpdate, error) {
 }
 
 func decodeNotificationMsg(buf *bytes.Buffer) (*BGPNotification, error) {
-	msg, err := _decodeNotificationMsg(buf)
-	return msg.(*BGPNotification), err
-}
-
-func _decodeNotificationMsg(buf *bytes.Buffer) (interface{}, error) {
 	msg := &BGPNotification{}
 
 	fields := []interface{}{

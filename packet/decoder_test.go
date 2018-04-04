@@ -254,70 +254,64 @@ func TestDecode(t *testing.T) {
 }
 
 func TestDecodeNotificationMsg(t *testing.T) {
-	tests := []test{
+	tests := []struct {
+		name     string
+		input    []byte
+		wantFail bool
+		expected interface{}
+	}{
 		{
-			// Invalid ErrCode
-			testNum:  1,
+			name:     "Invalid error code",
 			input:    []byte{0, 0},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrCode
-			testNum:  2,
+			name:     "Invalid error code #2",
 			input:    []byte{7, 0},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Header)
-			testNum:  3,
+			name:     "Invalid ErrSubCode (Header)",
 			input:    []byte{1, 0},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Header)
-			testNum:  4,
+			name:     "Invalid ErrSubCode (Header) #2",
 			input:    []byte{1, 4},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Open)
-			testNum:  5,
+			name:     "Invalid ErrSubCode (Open)",
 			input:    []byte{2, 0},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Open)
-			testNum:  6,
+			name:     "Invalid ErrSubCode (Open) #2",
 			input:    []byte{2, 7},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Open)
-			testNum:  7,
+			name:     "Invalid ErrSubCode (Open) #3",
 			input:    []byte{2, 5},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Update)
-			testNum:  8,
+			name:     "Invalid ErrSubCode (Update)",
 			input:    []byte{3, 0},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Update)
-			testNum:  9,
+			name:     "Invalid ErrSubCode (Update) #2",
 			input:    []byte{3, 12},
 			wantFail: true,
 		},
 		{
-			// Invalid ErrSubCode (Update)
-			testNum:  10,
+			name:     "Invalid ErrSubCode (Update) #3",
 			input:    []byte{3, 7},
 			wantFail: true,
 		},
 		{
-			// Valid notification
-			testNum:  11,
+			name:     "Valid Notification",
 			input:    []byte{2, 2},
 			wantFail: false,
 			expected: &BGPNotification{
@@ -325,9 +319,73 @@ func TestDecodeNotificationMsg(t *testing.T) {
 				ErrorSubcode: 2,
 			},
 		},
+		{
+			name:     "Empty input",
+			input:    []byte{},
+			wantFail: true,
+		},
+		{
+			name:     "Hold Timer Expired",
+			input:    []byte{4, 0},
+			wantFail: false,
+			expected: &BGPNotification{
+				ErrorCode:    4,
+				ErrorSubcode: 0,
+			},
+		},
+		{
+			name:     "Hold Timer Expired (invalid subcode)",
+			input:    []byte{4, 1},
+			wantFail: true,
+		},
+		{
+			name:     "FSM Error",
+			input:    []byte{5, 0},
+			wantFail: false,
+			expected: &BGPNotification{
+				ErrorCode:    5,
+				ErrorSubcode: 0,
+			},
+		},
+		{
+			name:     "FSM Error (invalid subcode)",
+			input:    []byte{5, 1},
+			wantFail: true,
+		},
+		{
+			name:     "Cease",
+			input:    []byte{6, 0},
+			wantFail: false,
+			expected: &BGPNotification{
+				ErrorCode:    6,
+				ErrorSubcode: 0,
+			},
+		},
+		{
+			name:     "Cease (invalid subcode)",
+			input:    []byte{6, 1},
+			wantFail: true,
+		},
 	}
 
-	genericTest(_decodeNotificationMsg, tests, t)
+	for _, test := range tests {
+		res, err := decodeNotificationMsg(bytes.NewBuffer(test.input))
+
+		if test.wantFail {
+			if err != nil {
+				continue
+			}
+			t.Errorf("Expected error did not happen for test %q", test.name)
+			continue
+		}
+
+		if err != nil {
+			t.Errorf("Unexpected failure for test %q: %v", test.name, err)
+			continue
+		}
+
+		assert.Equal(t, test.expected, res)
+	}
 }
 
 func TestDecodeUpdateMsg(t *testing.T) {
