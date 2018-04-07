@@ -6,88 +6,40 @@ import (
 	"github.com/taktv6/tflow2/convert"
 )
 
-func EncodeKeepaliveMsg() ([]byte, error) {
+func SerializeKeepaliveMsg() []byte {
 	keepaliveLen := uint16(19)
 	buf := bytes.NewBuffer(make([]byte, 0, keepaliveLen))
-	err := encodeHeader(buf, keepaliveLen, KeepaliveMsg)
-	if err != nil {
-		return nil, err
-	}
+	serializeHeader(buf, keepaliveLen, KeepaliveMsg)
 
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
-func EncodeNotificationMsg(msg *BGPNotification) ([]byte, error) {
+func SerializeNotificationMsg(msg *BGPNotification) []byte {
 	notificationLen := uint16(21)
 	buf := bytes.NewBuffer(make([]byte, 0, notificationLen))
-	err := encodeHeader(buf, notificationLen, NotificationMsg)
-	if err != nil {
-		return nil, err
-	}
+	serializeHeader(buf, notificationLen, NotificationMsg)
+	buf.WriteByte(msg.ErrorCode)
+	buf.WriteByte(msg.ErrorSubcode)
 
-	err = buf.WriteByte(msg.ErrorCode)
-	if err != nil {
-		return nil, err
-	}
-
-	err = buf.WriteByte(msg.ErrorSubcode)
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
-func EncodeOpenMsg(msg *BGPOpen) ([]byte, error) {
+func SerializeOpenMsg(msg *BGPOpen) []byte {
 	openLen := uint16(29)
 	buf := bytes.NewBuffer(make([]byte, 0, openLen))
-	err := encodeHeader(buf, openLen, OpenMsg)
-	if err != nil {
-		return nil, err
-	}
+	serializeHeader(buf, openLen, OpenMsg)
 
-	err = buf.WriteByte(msg.Version)
-	if err != nil {
-		return nil, err
-	}
+	buf.WriteByte(msg.Version)
+	buf.Write(convert.Uint16Byte(msg.AS))
+	buf.Write(convert.Uint16Byte(msg.HoldTime))
+	buf.Write(convert.Uint32Byte(msg.BGPIdentifier))
+	buf.WriteByte(uint8(0))
 
-	_, err = buf.Write(convert.Uint16Byte(msg.AS))
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = buf.Write(convert.Uint16Byte(msg.HoldTime))
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = buf.Write(convert.Uint32Byte(msg.BGPIdentifier))
-	if err != nil {
-		return nil, err
-	}
-
-	err = buf.WriteByte(uint8(0))
-	if err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return buf.Bytes()
 }
 
-func encodeHeader(buf *bytes.Buffer, length uint16, typ uint8) error {
-	for i := 0; i < 16; i++ {
-		if err := buf.WriteByte(0xff); err != nil {
-			return err
-		}
-	}
-
-	if _, err := buf.Write(convert.Uint16Byte(length)); err != nil {
-		return err
-	}
-
-	if err := buf.WriteByte(typ); err != nil {
-		return err
-	}
-
-	return nil
+func serializeHeader(buf *bytes.Buffer, length uint16, typ uint8) {
+	buf.Write([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	buf.Write(convert.Uint16Byte(length))
+	buf.WriteByte(typ)
 }
