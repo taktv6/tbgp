@@ -1396,7 +1396,7 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Incomplete Header
 			testNum:  8,
-			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19},
+			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
 			wantFail: true,
 		},
 		{
