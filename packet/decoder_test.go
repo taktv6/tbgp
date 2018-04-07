@@ -1390,18 +1390,18 @@ func TestDecodeHeader(t *testing.T) {
 		{
 			// Incomplete Marker
 			testNum:  7,
-			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255},
 			wantFail: true,
 		},
 		{
 			// Incomplete Header
 			testNum:  8,
-			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0},
+			input:    []byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0, 19},
 			wantFail: true,
 		},
 		{
 			// Empty input
-			testNum:  8,
+			testNum:  9,
 			input:    []byte{},
 			wantFail: true,
 		},
