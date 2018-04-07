@@ -426,7 +426,6 @@ func (fsm *FSM) openSent() int {
 				fsm.connectRetryCounter++
 				return fsm.changeState(Idle, "Received NOTIFICATION")
 			case packet.OpenMsg:
-				msg.Dump()
 				openMsg := msg.Body.(*packet.BGPOpen)
 				fsm.neighborID = openMsg.BGPIdentifier
 				fsm.resolveCollision()
@@ -587,7 +586,6 @@ func (fsm *FSM) openConfirm() int {
 				return fsm.changeState(Idle, "Failed to decode BGP message")
 			}
 
-			msg.Dump()
 			switch msg.Header.Type {
 			case packet.NotificationMsg:
 				nMsg := msg.Body.(packet.BGPNotification)
@@ -609,7 +607,6 @@ func (fsm *FSM) openConfirm() int {
 				fsm.holdTimer.Reset(time.Second * fsm.holdTime)
 				return fsm.changeState(Established, "Received KEEPALIVE")
 			case packet.OpenMsg:
-				msg.Dump()
 				openMsg := msg.Body.(*packet.BGPOpen)
 				fsm.neighborID = openMsg.BGPIdentifier
 				fsm.resolveCollision()
@@ -717,7 +714,6 @@ func (fsm *FSM) established() int {
 				if fsm.holdTime != 0 {
 					fsm.holdTimer.Reset(time.Second * fsm.holdTime)
 				}
-				msg.Dump()
 
 				u := msg.Body.(*packet.BGPUpdate)
 
