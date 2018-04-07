@@ -1387,9 +1387,44 @@ func TestDecodeHeader(t *testing.T) {
 				Type:   KeepaliveMsg,
 			},
 		},
+		{
+			// Incomplete Marker
+			testNum:  7,
+			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+			wantFail: true,
+		},
+		{
+			// Incomplete Header
+			testNum:  8,
+			input:    []byte{1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 19},
+			wantFail: true,
+		},
+		{
+			// Empty input
+			testNum:  8,
+			input:    []byte{},
+			wantFail: true,
+		},
 	}
 
-	genericTest(_decodeHeader, tests, t)
+	for _, test := range tests {
+		buf := bytes.NewBuffer(test.input)
+		res, err := decodeHeader(buf)
+
+		if err != nil {
+			if test.wantFail {
+				continue
+			}
+			t.Errorf("Unexpected failure for test %d: %v", test.testNum, err)
+			continue
+		}
+
+		if test.wantFail {
+			t.Errorf("Unexpected success fo test %d", test.testNum)
+		}
+
+		assert.Equal(t, test.expected, res)
+	}
 }
 
 func genericTest(f decodeFunc, tests []test, t *testing.T) {
@@ -1456,5 +1491,46 @@ func TestIsValidIdentifier(t *testing.T) {
 	for _, test := range tests {
 		res := isValidIdentifier(test.input)
 		assert.Equal(t, test.expected, res)
+	}
+}
+
+func TestValidateOpenMessage(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *BGPOpen
+		wantFail bool
+	}{
+		{
+			name: "Valid #1",
+			input: &BGPOpen{
+				Version:       4,
+				BGPIdentifier: convert.Uint32b([]byte{8, 8, 8, 8}),
+			},
+			wantFail: false,
+		},
+		{
+			name: "Invalid Identifier",
+			input: &BGPOpen{
+				Version:       4,
+				BGPIdentifier: convert.Uint32b([]byte{0, 8, 8, 8}),
+			},
+			wantFail: true,
+		},
+	}
+
+	for _, test := range tests {
+		res := validateOpen(test.input)
+
+		if res != nil {
+			if test.wantFail {
+				continue
+			}
+			t.Errorf("Unexpected failure for test %q: %v", test.name, res)
+			continue
+		}
+
+		if test.wantFail {
+			t.Errorf("Unexpected success for test %q", test.name)
+		}
 	}
 }

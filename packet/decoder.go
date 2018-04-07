@@ -198,14 +198,6 @@ func isValidIdentifier(id uint32) bool {
 }
 
 func decodeHeader(buf *bytes.Buffer) (*BGPHeader, error) {
-	msg, err := _decodeHeader(buf)
-	if err != nil {
-		return nil, err
-	}
-	return msg.(*BGPHeader), err
-}
-
-func _decodeHeader(buf *bytes.Buffer) (interface{}, error) {
 	hdr := &BGPHeader{}
 
 	marker := make([]byte, MarkerLen)
