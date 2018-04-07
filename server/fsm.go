@@ -804,12 +804,9 @@ func (fsm *FSM) resetDelayOpenTimer() {
 }
 
 func (fsm *FSM) sendKeepalive() error {
-	msg, err := packet.EncodeKeepaliveMsg()
-	if err != nil {
-		return fmt.Errorf("Unable to generate KEEPALIVE message: %v", err)
-	}
+	msg := packet.SerializeKeepaliveMsg()
 
-	_, err = fsm.con.Write(msg)
+	_, err := fsm.con.Write(msg)
 	if err != nil {
 		return fmt.Errorf("Unable to send KEEPALIVE message: %v", err)
 	}
@@ -818,18 +815,15 @@ func (fsm *FSM) sendKeepalive() error {
 }
 
 func (fsm *FSM) sendOpen(c *net.TCPConn) error {
-	msg, err := packet.EncodeOpenMsg(&packet.BGPOpen{
+	msg := packet.SerializeOpenMsg(&packet.BGPOpen{
 		Version:       BGPVersion,
 		AS:            fsm.localASN,
 		HoldTime:      uint16(fsm.holdTimeConfigured),
 		BGPIdentifier: fsm.routerID,
 		OptParmLen:    0,
 	})
-	if err != nil {
-		return fmt.Errorf("Unable to generate OPEN message: %v", err)
-	}
 
-	_, err = c.Write(msg)
+	_, err := c.Write(msg)
 	if err != nil {
 		return fmt.Errorf("Unable to send OPEN message: %v", err)
 	}
@@ -842,12 +836,9 @@ func sendNotification(c *net.TCPConn, errorCode uint8, errorSubCode uint8) error
 		return fmt.Errorf("connection is nil")
 	}
 
-	msg, err := packet.EncodeNotificationMsg(&packet.BGPNotification{})
-	if err != nil {
-		return fmt.Errorf("Unable to generate NOTIFICATION message: %v", err)
-	}
+	msg := packet.SerializeNotificationMsg(&packet.BGPNotification{})
 
-	_, err = c.Write(msg)
+	_, err := c.Write(msg)
 	if err != nil {
 		return fmt.Errorf("Unable to send NOTIFICATION message: %v", err)
 	}
